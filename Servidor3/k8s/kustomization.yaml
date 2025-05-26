@@ -1,0 +1,20 @@
+resources:
+  - grafana-deployment.yaml
+  - grafana-service.yaml
+  - grafana-configmap.yaml
+  - prometheus-deployment.yaml
+  - prometheus-service.yaml
+  - prometheus-configmap.yaml
+  - streamlit-deployment.yaml
+  - streamlit-service.yaml
+
+images:
+  - name: your-dhub-user/grafana
+    newName: your-dhub-user/grafana
+    newTag: "initial"
+  - name: your-dhub-user/prometheus
+    newName: your-dhub-user/prometheus
+    newTag: "initial"
+  - name: your-dhub-user/streamlit-app
+    newName: your-dhub-user/streamlit-app
+    newTag: "initial"

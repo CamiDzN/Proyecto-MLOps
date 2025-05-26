@@ -1,0 +1,26 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: api
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: api
+  template:
+    metadata:
+      labels:
+        app: api
+    spec:
+      containers:
+        - name: api
+          image: luiscacyber/grafana:initial
+          ports:
+            - containerPort: 8000
+          env:
+            - name: MODEL_NAME
+              value: "MiModelo"
+            - name: MLFLOW_TRACKING_URI
+              value: "http://mlflow-server:5000"
+            - name: DB_URL
+              value: "postgresql://user:pass@db:5432/raw_data"

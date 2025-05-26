@@ -1,0 +1,28 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: streamlit
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: streamlit
+  template:
+    metadata:
+      labels:
+        app: streamlit
+    spec:
+      containers:
+      - name: streamlit
+        image: luiscacyber/grafana:initial
+        ports:
+        - containerPort: 8501
+        env:
+        - name: PROMETHEUS_MULTIPROC_DIR
+          value: /tmp/streamlit_metrics
+        volumeMounts:
+        - name: metrics
+          mountPath: /tmp/streamlit_metrics
+      volumes:
+      - name: metrics
+        emptyDir: {}
