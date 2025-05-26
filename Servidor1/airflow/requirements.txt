@@ -1,0 +1,7 @@
+pandas
+numpy
+requests
+sqlalchemy
+pymysql
+scikit-learn
+mlflow==2.2.1

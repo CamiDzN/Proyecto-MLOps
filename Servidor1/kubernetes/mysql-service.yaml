@@ -1,0 +1,13 @@
+apiVersion: v1
+kind: Service
+metadata:
+  name: mysql-service
+spec:
+  type: NodePort  # Esto habilita el acceso hacia fuera del cluster vía IP + NodePort.
+  selector:
+    app: mysql
+  ports:
+    - protocol: TCP
+      port: 3306       # Puerto del servicio (interno)
+      targetPort: 3306   # Puerto del contenedor
+      nodePort: 30306    # Puerto host en el nodo; puedes ajustarlo según disponibilidad.

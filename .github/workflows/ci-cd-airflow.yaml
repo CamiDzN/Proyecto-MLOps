@@ -1,0 +1,94 @@
+# .github/workflows/ci-cd-airflow.yml
+name: CI/CD Airflow
+
+permissions:
+  contents: write
+
+on:
+  push:
+    branches: [ CamiDz ]
+    paths:
+      - 'Servidor1/airflow/**'
+      - 'Servidor1/docker-compose.yaml'
+  workflow_dispatch:
+
+env:
+  REGISTRY: docker.io
+  REPO_AIRFLOW: ${{ secrets.DOCKERHUB_USER }}/airflow
+
+jobs:
+  build-and-push:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v3
+
+      - name: Definir IMAGE_TAG
+        run: |
+          echo "IMAGE_TAG=$(date +'%Y%m%d')-${{ github.run_number }}" >> $GITHUB_ENV
+
+      - name: Login en DockerHub
+        uses: docker/login-action@v2
+        with:
+          username: ${{ secrets.DOCKERHUB_USER }}
+          password: ${{ secrets.DOCKERHUB_TOKEN }}
+
+      # 1) Build con load para poder testear localmente
+      - name: Build de imagen Airflow (carga local)
+        uses: docker/build-push-action@v4
+        with:
+          context: Servidor1/airflow
+          load: true
+          tags: ${{ env.REPO_AIRFLOW }}:${{ env.IMAGE_TAG }}
+
+      # 2) Smoke-test: comprobar que 'airflow version' funciona
+      - name: Smoke-test: airflow version
+        run: |
+          docker run --rm ${{ env.REPO_AIRFLOW }}:${{ env.IMAGE_TAG }} airflow version
+
+      # 3) Smoke-test: webserver responde en /health
+      - name: Smoke-test: webserver health endpoint
+        run: |
+          cid=$(docker run -d -p 8080:8080 ${{ env.REPO_AIRFLOW }}:${{ env.IMAGE_TAG }} webserver)
+          for i in $(seq 1 10); do
+            if curl -sf http://localhost:8080/health; then
+              echo "✅ Webserver healthy"
+              docker stop $cid
+              exit 0
+            fi
+            echo "Esperando salud… intento $i"
+            sleep 5
+          done
+          echo "❌ Webserver no arrancó"
+          docker logs $cid
+          docker stop $cid
+          exit 1
+
+      # 4) Push de la imagen validada
+      - name: Push de imagen a DockerHub
+        uses: docker/build-push-action@v4
+        with:
+          context: Servidor1/airflow
+          push: true
+          tags: ${{ env.REPO_AIRFLOW }}:${{ env.IMAGE_TAG }}
+
+      # 5) Actualizar docker-compose.yaml con yq
+      - name: Actualizar docker-compose.yaml con yq
+        uses: mikefarah/yq@v4
+        with:
+          cmd: |
+            eval '.["x-airflow-common"].image = strenv(REPO_AIRFLOW) + ":" + strenv(IMAGE_TAG)' -i Servidor1/docker-compose.yaml
+
+      # 6) Commit & Push docker-compose.yaml
+      - name: Commit & Push docker-compose.yaml
+        run: |
+          git config user.name "GitHub Actions"
+          git config user.email "actions@github.com"
+          if git diff --quiet Servidor1/docker-compose.yaml; then
+            echo "No hay cambios en docker-compose.yaml"
+          else
+            git add Servidor1/docker-compose.yaml
+            git commit -m "chore: actualizar Airflow image tag a ${{ env.IMAGE_TAG }}"
+            git push origin main
+          fi
