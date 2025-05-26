@@ -73,10 +73,24 @@ jobs:
           tags: ${{ env.REPO_AIRFLOW }}:${{ env.IMAGE_TAG }}
 
       # 7. Actualizar .env con el nuevo tag
-      - name: Actualizar .env con el nuevo tag
+      - name: Actualizar .env sin perder AIRFLOW_UID
         run: |
-          echo "REPO_AIRFLOW=${{ secrets.DOCKERHUB_USER }}/airflow" > .env
-          echo "IMAGE_TAG=${{ env.IMAGE_TAG }}" >> .env
+          # Asegura que exista .env
+          touch .env
+
+          # REPO_AIRFLOW (update or append)
+          if grep -q '^REPO_AIRFLOW=' .env; then
+            sed -i "s|^REPO_AIRFLOW=.*|REPO_AIRFLOW=${{ secrets.DOCKERHUB_USER }}/airflow|" .env
+          else
+            echo "REPO_AIRFLOW=${{ secrets.DOCKERHUB_USER }}/airflow" >> .env
+          fi
+
+          # IMAGE_TAG (update or append)
+          if grep -q '^IMAGE_TAG=' .env; then
+            sed -i "s|^IMAGE_TAG=.*|IMAGE_TAG=${{ env.IMAGE_TAG }}|" .env
+          else
+            echo "IMAGE_TAG=${{ env.IMAGE_TAG }}" >> .env
+          fi
 
       # 8. Commit & Push de .env
       - name: Commit & Push .env
