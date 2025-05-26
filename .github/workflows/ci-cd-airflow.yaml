@@ -46,7 +46,7 @@ jobs:
           tags: ${{ env.REPO_AIRFLOW }}:${{ env.IMAGE_TAG }}
 
       # 5. Smoke-test de entrenamiento + SHAP
-      - name: Smoke-test: regresión y SHAP
+      - name: "Smoke-test: regresión y SHAP"
         run: |
           docker run --rm ${{ env.REPO_AIRFLOW }}:${{ env.IMAGE_TAG }} python - << 'EOF'
           import pandas as pd
