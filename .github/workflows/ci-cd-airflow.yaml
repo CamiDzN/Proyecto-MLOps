@@ -21,20 +21,23 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
+      # 1. Checkout
       - name: Checkout repository
         uses: actions/checkout@v3
 
+      # 2. Generar tag semántico
       - name: Definir IMAGE_TAG
         run: |
           echo "IMAGE_TAG=$(date +'%Y%m%d')-${{ github.run_number }}" >> $GITHUB_ENV
 
+      # 3. Login en Docker Hub
       - name: Login en DockerHub
         uses: docker/login-action@v2
         with:
           username: ${{ secrets.DOCKERHUB_USER }}
           password: ${{ secrets.DOCKERHUB_TOKEN }}
 
-      # 1) Build con load para poder testear localmente
+      # 4. Build y carga local para tests
       - name: Build de imagen Airflow (carga local)
         uses: docker/build-push-action@v4
         with:
@@ -42,31 +45,26 @@ jobs:
           load: true
           tags: ${{ env.REPO_AIRFLOW }}:${{ env.IMAGE_TAG }}
 
-      # 2) Smoke-test: entrenamiento + SHAP
-      - name: "Smoke-test: regresión y SHAP"
+      # 5. Smoke-test de entrenamiento + SHAP
+      - name: Smoke-test: regresión y SHAP
         run: |
           docker run --rm ${{ env.REPO_AIRFLOW }}:${{ env.IMAGE_TAG }} python - << 'EOF'
           import pandas as pd
           from sklearn.linear_model import LinearRegression
           import shap
 
-          # Dataset sintético
-          X = pd.DataFrame({'x1':[0,1,2,3], 'x2':[1,2,3,4]})
+          X = pd.DataFrame({'x1':[0,1,2,3],'x2':[1,2,3,4]})
           y = pd.Series([1,3,5,7])
 
-          # Entrena modelo
           model = LinearRegression().fit(X, y)
-
-          # Explainer SHAP
           explainer = shap.Explainer(model, X)
           shap_values = explainer(X)
 
-          # Validación sencilla
-          assert shap_values.values.shape[0] == X.shape[0], "SHAP no devolvió tantas filas como entradas"
+          assert shap_values.values.shape[0] == X.shape[0], "SHAP values count mismatch"
           print("✅ Entrenamiento y SHAP OK")
           EOF
 
-      # 3) Push de la imagen validada
+      # 6. Push de la imagen validada
       - name: Push de imagen a DockerHub
         uses: docker/build-push-action@v4
         with:
@@ -74,22 +72,19 @@ jobs:
           push: true
           tags: ${{ env.REPO_AIRFLOW }}:${{ env.IMAGE_TAG }}
 
-      # 4) Actualizar docker-compose.yaml con yq
-      - name: Actualizar docker-compose.yaml con yq
-        uses: mikefarah/yq@v4
-        with:
-          cmd: |
-            eval '.["x-airflow-common"].image = strenv(REPO_AIRFLOW) + ":" + strenv(IMAGE_TAG)' -i Servidor1/docker-compose.yaml
+      # 7. Actualizar .env con el nuevo tag
+      - name: Actualizar .env con el nuevo tag
+        run: |
+          echo "REPO_AIRFLOW=${{ secrets.DOCKERHUB_USER }}/airflow" > .env
+          echo "IMAGE_TAG=${{ env.IMAGE_TAG }}" >> .env
 
-      # 5) Commit & Push docker-compose.yaml
-      - name: Commit & Push docker-compose.yaml
+      # 8. Commit & Push de .env
+      - name: Commit & Push .env
         run: |
           git config user.name "GitHub Actions"
           git config user.email "actions@github.com"
-          if git diff --quiet Servidor1/docker-compose.yaml; then
-            echo "No hay cambios en docker-compose.yaml"
-          else
-            git add Servidor1/docker-compose.yaml
-            git commit -m "chore: actualizar Airflow image tag a ${{ env.IMAGE_TAG }}"
-            git push origin main
-          fi
+          git add .env
+          git commit -m "chore: actualizar .env con tag ${{ env.IMAGE_TAG }}" || echo "No hay cambios en .env"
+          git push origin main
+
+

@@ -1,6 +1,6 @@
 x-airflow-common:
   &airflow-common
-  image:
+  image: "${REPO_AIRFLOW}:${IMAGE_TAG}"
   environment:
     &airflow-common-env
     AIRFLOW__CORE__EXECUTOR: CeleryExecutor
