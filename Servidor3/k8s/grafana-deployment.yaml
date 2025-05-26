@@ -14,7 +14,7 @@ spec:
     spec:
       containers:
       - name: grafana
-        image: ${{ secrets.DOCKERHUB_USER }}/grafana:${{ github.sha }}
+        image: luiscacyber/grafana:initial
         ports:
         - containerPort: 3000
         volumeMounts:

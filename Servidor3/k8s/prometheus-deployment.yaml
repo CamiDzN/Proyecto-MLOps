@@ -14,7 +14,7 @@ spec:
     spec:
       containers:
       - name: prometheus
-        image: ${{ secrets.DOCKERHUB_USER }}/prometheus:${{ github.sha }}
+        image: luiscacyber/grafana:initial
         args:
           - "--config.file=/etc/prometheus/prometheus.yml"
         ports:
