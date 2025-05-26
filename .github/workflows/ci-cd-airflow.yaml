@@ -43,12 +43,12 @@ jobs:
           tags: ${{ env.REPO_AIRFLOW }}:${{ env.IMAGE_TAG }}
 
       # 2) Smoke-test: comprobar que 'airflow version' funciona
-      - name: Smoke-test: airflow version
+      - name: "Smoke-test: airflow version"
         run: |
           docker run --rm ${{ env.REPO_AIRFLOW }}:${{ env.IMAGE_TAG }} airflow version
 
       # 3) Smoke-test: webserver responde en /health
-      - name: Smoke-test: webserver health endpoint
+      - name: "Smoke-test: webserver health endpoint"
         run: |
           cid=$(docker run -d -p 8080:8080 ${{ env.REPO_AIRFLOW }}:${{ env.IMAGE_TAG }} webserver)
           for i in $(seq 1 10); do
