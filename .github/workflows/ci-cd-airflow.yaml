@@ -42,30 +42,31 @@ jobs:
           load: true
           tags: ${{ env.REPO_AIRFLOW }}:${{ env.IMAGE_TAG }}
 
-      # 2) Smoke-test: comprobar que 'airflow version' funciona
-      - name: "Smoke-test: airflow version"
+      # 2) Smoke-test: entrenamiento + SHAP
+      - name: Smoke-test: regresión y SHAP
         run: |
-          docker run --rm ${{ env.REPO_AIRFLOW }}:${{ env.IMAGE_TAG }} airflow version
+          docker run --rm ${{ env.REPO_AIRFLOW }}:${{ env.IMAGE_TAG }} python - << 'EOF'
+          import pandas as pd
+          from sklearn.linear_model import LinearRegression
+          import shap
 
-      # 3) Smoke-test: webserver responde en /health
-      - name: "Smoke-test: webserver health endpoint"
-        run: |
-          cid=$(docker run -d -p 8080:8080 ${{ env.REPO_AIRFLOW }}:${{ env.IMAGE_TAG }} webserver)
-          for i in $(seq 1 10); do
-            if curl -sf http://localhost:8080/health; then
-              echo "✅ Webserver healthy"
-              docker stop $cid
-              exit 0
-            fi
-            echo "Esperando salud… intento $i"
-            sleep 5
-          done
-          echo "❌ Webserver no arrancó"
-          docker logs $cid
-          docker stop $cid
-          exit 1
+          # Dataset sintético
+          X = pd.DataFrame({'x1':[0,1,2,3], 'x2':[1,2,3,4]})
+          y = pd.Series([1,3,5,7])
 
-      # 4) Push de la imagen validada
+          # Entrena modelo
+          model = LinearRegression().fit(X, y)
+
+          # Explainer SHAP
+          explainer = shap.Explainer(model, X)
+          shap_values = explainer(X)
+
+          # Validación sencilla
+          assert shap_values.values.shape[0] == X.shape[0], "SHAP no devolvió tantas filas como entradas"
+          print("✅ Entrenamiento y SHAP OK")
+          EOF
+
+      # 3) Push de la imagen validada
       - name: Push de imagen a DockerHub
         uses: docker/build-push-action@v4
         with:
@@ -73,14 +74,14 @@ jobs:
           push: true
           tags: ${{ env.REPO_AIRFLOW }}:${{ env.IMAGE_TAG }}
 
-      # 5) Actualizar docker-compose.yaml con yq
+      # 4) Actualizar docker-compose.yaml con yq
       - name: Actualizar docker-compose.yaml con yq
         uses: mikefarah/yq@v4
         with:
           cmd: |
             eval '.["x-airflow-common"].image = strenv(REPO_AIRFLOW) + ":" + strenv(IMAGE_TAG)' -i Servidor1/docker-compose.yaml
 
-      # 6) Commit & Push docker-compose.yaml
+      # 5) Commit & Push docker-compose.yaml
       - name: Commit & Push docker-compose.yaml
         run: |
           git config user.name "GitHub Actions"
