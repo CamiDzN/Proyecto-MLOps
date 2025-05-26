@@ -6,3 +6,4 @@ pymysql
 scikit-learn
 mlflow==2.2.1
 shap==0.47.2
+# CI trigger test
