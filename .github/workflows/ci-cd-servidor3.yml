@@ -1,0 +1,69 @@
+# .github/workflows/ci-cd-servidor3.yml
+name: CI/CD Servidor3
+
+on:
+  push:
+    branches: [ LuisCa ]               #  ← tu rama
+    paths:
+      - 'Servidor3/grafana/**'
+      - 'Servidor3/prometheus/**'
+      - 'Servidor3/streamlit/**'
+      - 'Servidor3/k8s/**'
+
+permissions:
+  contents: write
+
+jobs:
+  build-and-deploy:
+    runs-on: ubuntu-latest
+    steps:
+
+    - uses: actions/checkout@v3
+      with:
+        fetch-depth: 0                # necesario para poder hacer commit después
+
+    # 1) TAG semántico: fecha + número de run
+    - name: Definir IMAGE_TAG
+      run: echo "IMAGE_TAG=$(date +'%Y%m%d')-${{ github.run_number }}" >> $GITHUB_ENV
+
+    # 2) Construir todas las imágenes con ese TAG
+    - name: Build Docker images
+      run: |
+        docker build -t ${{ secrets.DOCKERHUB_USER }}/grafana:${{ env.IMAGE_TAG }}    ./Servidor3/grafana
+        docker build -t ${{ secrets.DOCKERHUB_USER }}/prometheus:${{ env.IMAGE_TAG }} ./Servidor3/prometheus
+        docker build -t ${{ secrets.DOCKERHUB_USER }}/streamlit-app:${{ env.IMAGE_TAG }} ./Servidor3/streamlit
+
+    # 3) Login + Push
+    - name: Log in to DockerHub
+      uses: docker/login-action@v2
+      with:
+        username: ${{ secrets.DOCKERHUB_USER }}
+        password: ${{ secrets.DOCKERHUB_TOKEN }}
+
+    - name: Push images
+      run: |
+        docker push ${{ secrets.DOCKERHUB_USER }}/grafana:${{ env.IMAGE_TAG }}
+        docker push ${{ secrets.DOCKERHUB_USER }}/prometheus:${{ env.IMAGE_TAG }}
+        docker push ${{ secrets.DOCKERHUB_USER }}/streamlit-app:${{ env.IMAGE_TAG }}
+
+    # 4) Inyectar el nuevo TAG en kustomization.yaml
+    - name: Actualizar kustomization
+      run: |
+        cd Servidor3/k8s
+        kustomize edit set image ${{ secrets.DOCKERHUB_USER }}/grafana:${{ env.IMAGE_TAG }}
+        kustomize edit set image ${{ secrets.DOCKERHUB_USER }}/prometheus:${{ env.IMAGE_TAG }}
+        kustomize edit set image ${{ secrets.DOCKERHUB_USER }}/streamlit-app:${{ env.IMAGE_TAG }}
+
+    # 5) Commit & push de los manifests actualizados
+    - name: Commit cambios de kustomization
+      run: |
+        git config user.name "GitHub Actions"
+        git config user.email "actions@github.com"
+        cd Servidor3/k8s
+        if git diff --quiet kustomization.yaml; then
+          echo "No hay cambios en kustomization.yaml"
+        else
+          git add kustomization.yaml
+          git commit -m "chore: actualizar imágenes a tag ${{ env.IMAGE_TAG }}"
+          git push origin LuisCa
+        fi
