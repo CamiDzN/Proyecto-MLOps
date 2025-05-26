@@ -1,20 +1,28 @@
 resources:
-  - grafana-deployment.yaml
-  - grafana-service.yaml
-  - grafana-configmap.yaml
-  - prometheus-deployment.yaml
-  - prometheus-service.yaml
-  - prometheus-configmap.yaml
-  - streamlit-deployment.yaml
-  - streamlit-service.yaml
+- grafana-deployment.yaml
+- grafana-service.yaml
+- grafana-configmap.yaml
+- prometheus-deployment.yaml
+- prometheus-service.yaml
+- prometheus-configmap.yaml
+- streamlit-deployment.yaml
+- streamlit-service.yaml
 
 images:
-  - name: your-dhub-user/grafana
-    newName: your-dhub-user/grafana
-    newTag: "initial"
-  - name: your-dhub-user/prometheus
-    newName: your-dhub-user/prometheus
-    newTag: "initial"
-  - name: your-dhub-user/streamlit-app
-    newName: your-dhub-user/streamlit-app
-    newTag: "initial"
+- name: camidzn/grafana
+  newTag: 20250526-1
+- name: camidzn/prometheus
+  newTag: 20250526-1
+- name: camidzn/streamlit-app
+  newTag: 20250526-1
+- name: your-dhub-user/grafana
+  newName: your-dhub-user/grafana
+  newTag: initial
+- name: your-dhub-user/prometheus
+  newName: your-dhub-user/prometheus
+  newTag: initial
+- name: your-dhub-user/streamlit-app
+  newName: your-dhub-user/streamlit-app
+  newTag: initial
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
