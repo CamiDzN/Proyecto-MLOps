@@ -1,0 +1,26 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: grafana
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: grafana
+  template:
+    metadata:
+      labels:
+        app: grafana
+    spec:
+      containers:
+      - name: grafana
+        image: ${{ secrets.DOCKERHUB_USER }}/grafana:${{ github.sha }}
+        ports:
+        - containerPort: 3000
+        volumeMounts:
+        - name: provisioning
+          mountPath: /etc/grafana/provisioning
+      volumes:
+      - name: provisioning
+        configMap:
+          name: grafana-provisioning
