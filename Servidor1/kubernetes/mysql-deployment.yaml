@@ -1,0 +1,52 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: mysql
+  labels:
+    app: mysql
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: mysql
+  template:
+    metadata:
+      labels:
+        app: mysql
+    spec:
+      initContainers:
+      - name: fix-permissions
+        image: busybox
+        command: ['sh', '-c', 'echo "Fixing permissions..." && chown -R 999:999 /var/lib/mysql && echo "Done fixing permissions."']
+        volumeMounts:
+        - name: mysql-data
+          mountPath: /var/lib/mysql
+      containers:
+      - name: mysql
+        image: mysql:8.0
+        securityContext:
+          runAsUser: 999
+          runAsGroup: 999
+        env:
+        - name: MYSQL_ROOT_PASSWORD
+          value: "supersecret"
+        - name: MYSQL_DATABASE
+          value: "CleanData"
+        - name: MYSQL_USER
+          value: "model_user"
+        - name: MYSQL_PASSWORD
+          value: "model_password"
+        ports:
+        - containerPort: 3306
+        volumeMounts:
+        - name: mysql-data
+          mountPath: /var/lib/mysql
+        - name: mysql-init
+          mountPath: /docker-entrypoint-initdb.d
+      volumes:
+      - name: mysql-data
+        persistentVolumeClaim:
+          claimName: mysql-pvc
+      - name: mysql-init
+        configMap:
+          name: mysql-init-scripts
