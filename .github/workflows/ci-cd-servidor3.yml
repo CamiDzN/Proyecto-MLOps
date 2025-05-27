@@ -15,6 +15,7 @@ permissions:
 
 jobs:
   build-and-deploy:
+    if: github.actor != 'github-actions[bot]'
     runs-on: ubuntu-latest
     steps:
 
@@ -60,7 +61,7 @@ jobs:
           git config user.email "actions@github.com"
           cd Servidor3/k8s
           # 1) Integrar cualquier commit que ya esté en remoto
-          git pull --rebase origin main
+          git pull --rebase --autostash origin main
 
           # 2) Detectar cambios, commitear y pushear
           
