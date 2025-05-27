@@ -1,3 +1,4 @@
+# CI trigger test 
 resources:
   - grafana-deployment.yaml
   - grafana-service.yaml
