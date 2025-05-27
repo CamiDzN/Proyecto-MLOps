@@ -59,6 +59,11 @@ jobs:
           git config user.name "GitHub Actions"
           git config user.email "actions@github.com"
           cd Servidor3/k8s
+          # 1) Integrar cualquier commit que ya esté en remoto
+          git pull --rebase origin main
+
+          # 2) Detectar cambios, commitear y pushear
+          
           if git diff --quiet kustomization.yaml; then
             echo "No hay cambios en kustomization.yaml"
           else
