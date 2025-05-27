@@ -6,7 +6,7 @@ permissions:
 
 on:
   push:
-    branches: [ CamiDz ]
+    branches: [ main ]
     paths:
       - 'Servidor1/airflow/**'
       - 'Servidor1/docker-compose.yaml'
