@@ -1,0 +1,18 @@
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: proyecto-mlops-daniel
+  namespace: argocd
+spec:
+  project: default
+  source:
+    repoURL: https://github.com/CamiDzN/Proyecto-MLOps
+    targetRevision: main
+    path: manifests/mlops
+  destination:
+    server: https://kubernetes.default.svc
+    namespace: mlops
+  syncPolicy:
+    automated:
+      selfHeal: true
+      prune: true
