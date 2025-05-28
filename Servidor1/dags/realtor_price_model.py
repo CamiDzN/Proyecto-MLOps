@@ -145,36 +145,38 @@ with DAG(
 
     def decide_train(**context):
         """
-        - Si new_records == 0: early exit → no_train
-        - Si new_records > 0: lee las últimas filas con text() + LIMIT :n
-        valida esquema y rangos, y decide train / no_train.
-        - Registra todo en MLflow (métrica new_records, tags decision & reason).
+        BranchPythonOperator para decidir:
+        - si new_records == 0  → no_train (tarea end_no_train)
+        - si hay errores de validación → no_train
+        - si new_records > 100 → train      (tarea split_data)
+        - en otros casos → no_train
+        Además registra toda la info en MLflow.
         """
         ti = context["ti"]
         new_records = ti.xcom_pull(key="new_records", task_ids="extract_data") or 0
 
-        # Early exit: si no llegan filas, no entrenamos ni validamos
+        # 1) Early exit sin datos nuevos
         if new_records == 0:
             mlflow.set_tracking_uri(os.getenv("AIRFLOW_VAR_MLFLOW_TRACKING_URI"))
             mlflow.set_experiment("Realtor_Price")
             with mlflow.start_run(run_name="decision"):
                 mlflow.log_metric("new_records", 0)
-                mlflow.set_tag("decision", "no_train")
+                mlflow.set_tag("decision", "end_no_train")
                 mlflow.set_tag("reason", "0 new records")
-            return "no_train"
+            return "end_no_train"
 
-        # Conexión a RawData y lectura de los últimos new_records
+        # 2) Leer últimas filas de realtor_raw
         RAW_URI = os.getenv("AIRFLOW_CONN_MYSQL_DEFAULT")
         engine = create_engine(RAW_URI)
-        query = text("""
+        sql = text("""
             SELECT *
             FROM realtor_raw
             ORDER BY fetched_at DESC
             LIMIT :n
         """)
-        df = pd.read_sql(query, con=engine, params={"n": new_records})
+        df = pd.read_sql(sql, con=engine, params={"n": new_records})
 
-        # Validaciones
+        # 3) Validaciones de esquema y contenido
         required_cols = [
             "brokered_by", "status", "price", "bed", "bath",
             "acre_lot", "street", "city", "state",
@@ -182,22 +184,23 @@ with DAG(
         ]
         invalid_reasons = []
 
-        # 1) Columnas faltantes
+        # 3.1 Columnas faltantes
         missing = set(required_cols) - set(df.columns)
         if missing:
             invalid_reasons.append(f"Faltan columnas: {sorted(missing)}")
 
-        # 2) Nulos en columnas requeridas
-        null_cols = df[required_cols].isnull().any()
-        if null_cols.any():
-            invalid_reasons.append(f"Nulos en: {null_cols[null_cols].index.tolist()}")
+        # 3.2 Nulos en columna requerida
+        if not missing:
+            nulls = df[required_cols].isnull().any()
+            if nulls.any():
+                invalid_reasons.append(f"Nulos en: {nulls[nulls].index.tolist()}")
 
-        # 3) Rangos plausibles (solo si df no vacío y columnas presentes)
+        # 3.3 Rangos plausibles
         if not df.empty and not missing:
             # price > 0
             if (df["price"] <= 0).any():
-                invalid_reasons.append("price ≤ 0 en alguna fila")
-            # bed y bath enteros en [0,10]
+                invalid_reasons.append("price ≤ 0")
+            # bed y bath en [0,10], enteros
             bad_bed = df[~df["bed"].apply(float.is_integer) | (df["bed"] < 0) | (df["bed"] > 10)]
             if not bad_bed.empty:
                 invalid_reasons.append("bed fuera de [0–10] o no entero")
@@ -210,10 +213,10 @@ with DAG(
             # house_size > 0
             if (df["house_size"] <= 0).any():
                 invalid_reasons.append("house_size ≤ 0")
-            # status en {'a','b'}
+            # status solo a o b
             if not df["status"].isin(["a", "b"]).all():
                 invalid_reasons.append("status no en {'a','b'}")
-            # zip_code con 5+ dígitos
+            # zip_code 5+ dígitos
             bad_zip = df[~df["zip_code"].astype(str).str.match(r"^\d{5,}$")]
             if not bad_zip.empty:
                 invalid_reasons.append("zip_code inválido")
@@ -223,25 +226,27 @@ with DAG(
             except Exception:
                 invalid_reasons.append("prev_sold_date no parseable")
 
-        # Registro en MLflow
+        # 4) Registrar en MLflow y decidir branch
         mlflow.set_tracking_uri(os.getenv("AIRFLOW_VAR_MLFLOW_TRACKING_URI"))
         mlflow.set_experiment("Realtor_Price")
         with mlflow.start_run(run_name="decision"):
             mlflow.log_metric("new_records", new_records)
+
             if invalid_reasons:
-                decision = "no_train"
+                branch = "end_no_train"
                 reason = " & ".join(invalid_reasons)
             elif new_records > 100:
-                decision = "train"
+                branch = "split_data"
                 reason = f"{new_records} nuevos > 100"
             else:
-                decision = "no_train"
+                branch = "end_no_train"
                 reason = f"{new_records} nuevos ≤ 100"
 
-            mlflow.set_tag("decision", decision)
+            mlflow.set_tag("decision", branch)
             mlflow.set_tag("reason", reason)
 
-        return decision
+        return branch
+
 
     decide_task = BranchPythonOperator(
         task_id="decide_to_train",
