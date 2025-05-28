@@ -166,7 +166,7 @@ with DAG(
         BranchPythonOperator para decidir si entrenar:
         - new_records == 0          → end_no_train
         - validaciones sobre FEATURES → end_no_train
-        - new_records > 100         → split_data
+        - new_records > 10000         → split_data
         - en otros casos           → end_no_train
 
         Además registra en MLflow:
@@ -248,10 +248,10 @@ with DAG(
 
             if invalid:
                 branch, reason = "end_no_train", " & ".join(invalid)
-            elif new_records > 100:
-                branch, reason = "split_data", f"{new_records} nuevos > 100"
+            elif new_records > 10000:
+                branch, reason = "split_data", f"{new_records} nuevos > 10000"
             else:
-                branch, reason = "end_no_train", f"{new_records} nuevos ≤ 100"
+                branch, reason = "end_no_train", f"{new_records} nuevos ≤ 10000"
 
             mlflow.set_tag("decision", branch)
             mlflow.set_tag("reason", reason)
@@ -324,11 +324,18 @@ with DAG(
             num_cols = ["bed","bath","acre_lot","house_size","price"]
             df[num_cols] = df[num_cols].fillna(method="ffill").fillna(0)
 
-            # 2) days_since_last_sale
-            df["prev_sold_date"] = pd.to_datetime(df["prev_sold_date"], errors="coerce")
+            # 2) days_since_last_sale (tz-naive – tz-naive)
+            df["prev_sold_date"] = pd.to_datetime(
+                df["prev_sold_date"], errors="coerce"
+            )
+            # ahora both son tz-naive
+            now = datetime.datetime.utcnow()
             df["days_since_last_sale"] = (
-                pd.Timestamp.utcnow() - df["prev_sold_date"]
-            ).dt.days.fillna(-1).astype(int)
+                (now - df["prev_sold_date"])
+                .dt.days
+                .fillna(-1)
+                .astype(int)
+            )
 
             # 3) One-hot de status
             df = pd.get_dummies(df, columns=["status"], drop_first=True)
