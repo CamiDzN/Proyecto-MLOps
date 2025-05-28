@@ -3,7 +3,7 @@ import datetime
 import requests
 import pandas as pd
 import numpy as np
-from sqlalchemy import create_engine, text
+from sqlalchemy import create_engine, text, inspect
 from sqlalchemy.exc import ProgrammingError
 from sklearn.linear_model import LinearRegression
 from sklearn.metrics import mean_squared_error
@@ -114,28 +114,45 @@ with DAG(
     )
 
     def reset_data(**context):
-        """ Llama a restart_data_generation y limpia todas las tablas. """
+        """
+        Llama al endpoint /restart_data_generation y luego vacía (TRUNCATE)
+        sólo las tablas que existan en RawData y CleanData.
+        """
+        # 1) Llamada al endpoint de reinicio
+        url = "http://10.43.101.108:80/restart_data_generation"
+        params = {"group_number": 7, "day": "Tuesday"}
+        resp = requests.get(url, params=params)
+        resp.raise_for_status()
+        logging.info("reset_data → restart_data_generation OK")
+
+        # 2) Engines y inspectors
         RAW_URI = os.getenv("AIRFLOW_CONN_MYSQL_DEFAULT")
         CLEAN_URI = os.getenv("AIRFLOW_CONN_MYSQL_CLEAN")
-        engine_raw = create_engine(RAW_URI)
+        engine_raw   = create_engine(RAW_URI)
         engine_clean = create_engine(CLEAN_URI)
+        insp_raw     = inspect(engine_raw)
+        insp_clean   = inspect(engine_clean)
 
-        # Llamada al endpoint de reinicio
-        params = {"group_number": 7, "day": "Tuesday"}
-        r = requests.get("http://10.43.101.108:80/restart_data_generation", params=params)
-        r.raise_for_status()
-
-        # Limpiar tablas en RawData
-        tablas_raw = ["realtor_raw", "train", "validation", "test"]
-        with engine_raw.begin() as conn:
-            for t in tablas_raw:
-                conn.execute(text(f"TRUNCATE TABLE `{t}`"))
-
-        # Limpiar tablas en CleanData
+        # 3) Listado de tablas a truncar
+        tablas_raw   = ["realtor_raw", "train", "validation", "test"]
         tablas_clean = ["train_clean", "validation_clean", "test_clean"]
+
+        # 4) Truncar sólo si la tabla existe
+        with engine_raw.begin() as conn:
+            for table in tablas_raw:
+                if insp_raw.has_table(table):
+                    conn.execute(text(f"TRUNCATE TABLE `{table}`"))
+                    logging.info(f"reset_data → tabla RawData.{table} truncada")
+                else:
+                    logging.info(f"reset_data → tabla RawData.{table} NO existe, omitiendo")
+
         with engine_clean.begin() as conn:
-            for t in tablas_clean:
-                conn.execute(text(f"TRUNCATE TABLE `{t}`"))
+            for table in tablas_clean:
+                if insp_clean.has_table(table):
+                    conn.execute(text(f"TRUNCATE TABLE `{table}`"))
+                    logging.info(f"reset_data → tabla CleanData.{table} truncada")
+                else:
+                    logging.info(f"reset_data → tabla CleanData.{table} NO existe, omitiendo")
 
     reset_task = PythonOperator(
         task_id="reset_data",
