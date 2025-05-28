@@ -30,36 +30,56 @@ with DAG(
 ) as dag:
 
     def extract_data(**context):
+        """
+        Llama a /data?group_number=7&day=Tuesday. 
+        Si devuelve 400 con el mensaje de fin, marca finished=True.
+        """
         RAW_URI = os.getenv("AIRFLOW_CONN_MYSQL_DEFAULT")
         engine = create_engine(RAW_URI)
 
-        # Petición con group_number=7 y day=Tuesday
+        url = "http://10.43.101.108:80/data"
         params = {"group_number": 7, "day": "Tuesday"}
-        resp = requests.get("http://10.43.101.108:80/data", params=params)
-        resp.raise_for_status()
-        payload = resp.json()
 
-        # Detectar fin de datos
         finished = False
-        if isinstance(payload, dict) and payload.get("status") == "finished":
-            finished = True
-            new_records = 0
-        else:
-            # asumimos lista de filas
-            rows = payload if isinstance(payload, list) else []
-            new_records = len(rows)
-            if new_records > 0:
+        new_records = 0
+
+        try:
+            resp = requests.get(url, params=params)
+            resp.raise_for_status()
+            # Si no hay excepción, esperamos una lista de filas
+            rows = resp.json()
+            if isinstance(rows, list) and rows:
                 df = pd.DataFrame(rows)
                 df["fetched_at"] = datetime.datetime.utcnow()
                 df.to_sql("realtor_raw", con=engine, if_exists="append", index=False)
-            elif new_records == 0:
-                # lista vacía sin status → también consideramos fin de datos
+                new_records = len(rows)
+            else:
+                # lista vacía = fin implícito
                 finished = True
+        except requests.exceptions.HTTPError as e:
+            # Si es 400 con detalle de “Ya se recolectó…”, es fin de datos
+            resp = e.response
+            if resp is not None and resp.status_code == 400:
+                detail = ""
+                try:
+                    detail = resp.json().get("detail", "")
+                except Exception:
+                    detail = resp.text
+                if "Ya se recolectó toda la información mínima necesaria" in detail:
+                    finished = True
+                    new_records = 0
+                else:
+                    # otro 400 distinto: re-lanzamos
+                    raise
+            else:
+                # cualquier otro error HTTP: re-lanzamos
+                raise
 
-        # Pasamos flags por XCom
+        # Publicamos en XCom
         ti = context["ti"]
         ti.xcom_push(key="new_records", value=new_records)
         ti.xcom_push(key="finished", value=finished)
+
 
     extract_task = PythonOperator(
         task_id="extract_data",
@@ -163,8 +183,8 @@ with DAG(
             if not bad_bath.empty:
                 invalid_reasons.append("bath fuera de [0–10] o no entero")
             # acre_lot > 0 y < 1000
-            if ((df["acre_lot"] <= 0) | (df["acre_lot"] > 1000)).any():
-                invalid_reasons.append("acre_lot fuera de (0,1000]")
+            if ((df["acre_lot"] <= 0) | (df["acre_lot"] > 10000)).any():
+                invalid_reasons.append("acre_lot fuera de (0,10000]")
             # house_size > 0
             if (df["house_size"] <= 0).any():
                 invalid_reasons.append("house_size ≤ 0")
@@ -322,6 +342,6 @@ with DAG(
 # Flujo
     extract_task >> branch_exhaust
     branch_exhaust >> reset_task >> EmptyOperator(task_id="end_after_reset")
-    branch_exhaust >> decide_task  # a partir de aquí sigue tu flujo original
+    branch_exhaust >> decide_task  
     decide_task >> split_task >> preprocess_task >> train_task >> end
     decide_task >> end_no_train >> end
