@@ -19,11 +19,15 @@ spec:
           args:
             - server
             - /data
+            - "--console-address"
+            - ":9001"
           env:
             - name: MINIO_ROOT_USER
               value: "admin"
             - name: MINIO_ROOT_PASSWORD
               value: "supersecret"
+            - name: MINIO_SERVER_URL
+              value: "http://10.43.101.196:30001"
           ports:
             - containerPort: 9000
             - containerPort: 9001

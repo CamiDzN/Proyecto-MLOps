@@ -12,7 +12,6 @@ spec:
           command: ["/bin/sh", "-c"]
           args:
             - |
-              mc alias set myminio http://minio-service.mlops.svc.cluster.local:9000 admin supersecret && \
+              mc alias set myminio http://minio-service:9000 admin supersecret && \
               mc mb myminio/mlflows3 || echo "Bucket already exists"
       restartPolicy: OnFailure
-

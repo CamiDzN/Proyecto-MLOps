@@ -17,12 +17,12 @@ spec:
         - name: postgres
           image: postgres:13
           env:
-            - name: POSTGRES_DB
-              value: "mlflow"
-            - name: POSTGRES_USER
-              value: "mlflow"
             - name: POSTGRES_PASSWORD
-              value: "mlflow123"
+              value: supersecret
+            - name: POSTGRES_DB
+              value: mlflow
+            - name: POSTGRES_USER
+              value: postgres
           ports:
             - containerPort: 5432
           volumeMounts:

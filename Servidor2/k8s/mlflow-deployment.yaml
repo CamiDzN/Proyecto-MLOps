@@ -2,7 +2,6 @@ apiVersion: apps/v1
 kind: Deployment
 metadata:
   name: mlflow
-  namespace: mlops
 spec:
   replicas: 1
   selector:
@@ -15,19 +14,24 @@ spec:
     spec:
       containers:
       - name: mlflow
-        image: ghcr.io/mlflow/mlflow:v2.9.2
+        image: localhost:32000/custom-mlflow:latest
         imagePullPolicy: IfNotPresent
         ports:
         - containerPort: 5000
         env:
+        - name: MLFLOW_S3_ENDPOINT_URL
+          value: http://minio-service:9000
         - name: AWS_ACCESS_KEY_ID
           value: admin
         - name: AWS_SECRET_ACCESS_KEY
           value: supersecret
-        - name: MLFLOW_S3_ENDPOINT_URL
-          value: http://minio-service.mlops.svc.cluster.local:9000
-        command: ["mlflow", "server"]
-        args:
-          - --backend-store-uri=postgresql://mlflow:mlflow123@postgres-service.mlops.svc.cluster.local:5432/mlflow
-          - --default-artifact-root=s3://mlflow/
-          - --host=0.0.0.0
+        command:
+        - mlflow
+        - server
+        - --backend-store-uri
+        - postgresql+psycopg2://postgres:supersecret@postgres-service/mlflow
+        - --default-artifact-root
+        - s3://mlflows3/artifacts
+        - --host
+        - 0.0.0.0
+        - --serve-artifacts
