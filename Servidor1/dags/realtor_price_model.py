@@ -348,6 +348,7 @@ with DAG(
                 "city",
                 "state",
                 "prev_sold_date",
+                "fetched_at",
             ]
             df = df.drop(columns=[c for c in drop_cols if c in df.columns])
 
