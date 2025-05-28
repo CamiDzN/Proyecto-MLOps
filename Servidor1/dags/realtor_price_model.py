@@ -252,6 +252,8 @@ with DAG(
             mlflow.set_tag("decision", branch)
             mlflow.set_tag("reason", reason)
 
+        logging.info(f"decide_train → voy a rama «{branch}» porque new_records={new_records}, reason={reason}")
+
         return branch
 
     decide_task = BranchPythonOperator(
