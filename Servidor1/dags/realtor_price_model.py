@@ -446,27 +446,27 @@ with DAG(
         provide_context=True,
     )
 
-# ruta alternativa cuando no entrenamos
-end_no_train = EmptyOperator(task_id="end_no_train")
+    # ruta alternativa cuando no entrenamos
+    end_no_train = EmptyOperator(task_id="end_no_train")
 
-# ruta de reset, ahora bien definida
-end_after_reset = EmptyOperator(task_id="end_after_reset")
+    # ruta de reset, ahora bien definida
+    end_after_reset = EmptyOperator(task_id="end_after_reset")
 
-# punto final común
-end = EmptyOperator(
-    task_id="end",
-    trigger_rule=TriggerRule.NONE_FAILED_MIN_ONE_SUCCESS,
-)
+    # punto final común
+    end = EmptyOperator(
+        task_id="end",
+        trigger_rule=TriggerRule.NONE_FAILED_MIN_ONE_SUCCESS,
+    )
 
-# Flujo
-extract_task >> branch_exhaust
+    # Flujo
+    extract_task >> branch_exhaust
 
-# -- rama reset --
-branch_exhaust >> reset_task >> end_after_reset >> end
+    # -- rama reset --
+    branch_exhaust >> reset_task >> end_after_reset >> end
 
-# -- rama entrenamiento --
-branch_exhaust >> decide_task
-decide_task    >> split_task >> preprocess_task >> train_task >> end
+    # -- rama entrenamiento --
+    branch_exhaust >> decide_task
+    decide_task    >> split_task >> preprocess_task >> train_task >> end
 
-# -- rama no-train --
-decide_task    >> end_no_train >> end
+    # -- rama no-train --
+    decide_task    >> end_no_train >> end
