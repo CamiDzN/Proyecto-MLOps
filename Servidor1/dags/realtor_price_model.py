@@ -4,6 +4,7 @@ import requests
 import pandas as pd
 import numpy as np
 from sqlalchemy import create_engine, text
+from sqlalchemy.exc import ProgrammingError
 from sklearn.linear_model import LinearRegression
 from sklearn.metrics import mean_squared_error
 import mlflow
@@ -31,8 +32,9 @@ with DAG(
 
     def extract_data(**context):
         """
-        Llama a /data?group_number=7&day=Tuesday. 
-        Si devuelve 400 con el mensaje de fin, marca finished=True.
+        Llama a /data?group_number=7&day=Tuesday.
+        Solo si la respuesta es HTTP 400 con el mensaje de fin marca finished=True.
+        En cualquier otro caso (lista vacía o datos), finished=False.
         """
         RAW_URI = os.getenv("AIRFLOW_CONN_MYSQL_DEFAULT")
         engine = create_engine(RAW_URI)
@@ -46,36 +48,34 @@ with DAG(
         try:
             resp = requests.get(url, params=params)
             resp.raise_for_status()
-            # Si no hay excepción, esperamos una lista de filas
             rows = resp.json()
+            logging.info(f"extract_data → recibí {len(rows)} filas")
+
+            # Si vienen filas, las guardo
             if isinstance(rows, list) and rows:
                 df = pd.DataFrame(rows)
                 df["fetched_at"] = datetime.datetime.utcnow()
                 df.to_sql("realtor_raw", con=engine, if_exists="append", index=False)
                 new_records = len(rows)
-            else:
-                # lista vacía = fin implícito
-                finished = True
+            # Si es lista vacía, new_records queda en 0, pero finished sigue False
+
         except requests.exceptions.HTTPError as e:
-            # Si es 400 con detalle de “Ya se recolectó…”, es fin de datos
+            # Sólo el 400 con el detalle “Ya se recolectó…” marca fin
             resp = e.response
             if resp is not None and resp.status_code == 400:
                 detail = ""
                 try:
                     detail = resp.json().get("detail", "")
-                except Exception:
+                except ValueError:
                     detail = resp.text
                 if "Ya se recolectó toda la información mínima necesaria" in detail:
+                    logging.info("extract_data → fin de datos detectado por HTTP 400")
                     finished = True
-                    new_records = 0
-                else:
-                    # otro 400 distinto: re-lanzamos
-                    raise
             else:
-                # cualquier otro error HTTP: re-lanzamos
+                # cualquier otro error HTTP lo propagamos
                 raise
 
-        # Publicamos en XCom
+        # Publiquemos en XCom
         ti = context["ti"]
         ti.xcom_push(key="new_records", value=new_records)
         ti.xcom_push(key="finished", value=finished)
