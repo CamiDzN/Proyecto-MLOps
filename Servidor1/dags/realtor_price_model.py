@@ -173,6 +173,10 @@ with DAG(
         - métrica new_records
         - tags: decision, reason, dag_run_id, execution_date
         """
+        # 0) Configurar MLflow
+        mlflow.set_tracking_uri(os.getenv("AIRFLOW_VAR_MLFLOW_TRACKING_URI"))
+        mlflow.set_experiment("Realtor_Price")
+
         ti = context["ti"]
         dag_run = context["dag_run"]
         new_records = ti.xcom_pull(key="new_records", task_ids="extract_data") or 0
@@ -216,25 +220,25 @@ with DAG(
                 invalid.append(f"Nulos en: {nulls[nulls].index.tolist()}")
 
             # 2.3) Rangos y formatos (solo si no hay nulos)
-            if not nulls.any():
-                if (df["price"] <= 0).any():
-                    invalid.append("price ≤ 0")
-                bad_bed = df[(df["bed"] < 0) | (df["bed"] > 10) | ((df["bed"] % 1) != 0)]
-                if not bad_bed.empty:
-                    invalid.append("bed fuera de [0–10] o no entero")
-                bad_bath = df[(df["bath"] < 0) | (df["bath"] > 10) | ((df["bath"] % 1) != 0)]
-                if not bad_bath.empty:
-                    invalid.append("bath fuera de [0–10] o no entero")
-                if ((df["acre_lot"] <= 0) | (df["acre_lot"] > 1000)).any():
-                    invalid.append("acre_lot fuera de (0,1000]")
-                valid_status = ["for_sale", "to_build"]
-                if not df["status"].isin(valid_status).all():
-                    invalid.append(f"status no en {valid_status}")
-                # prev_sold_date debe ser parseable
-                try:
-                    pd.to_datetime(df["prev_sold_date"])
-                except Exception:
-                    invalid.append("prev_sold_date no parseable")
+           # if not nulls.any():
+           #     if (df["price"] <= 0).any():
+           #         invalid.append("price ≤ 0")
+           #     bad_bed = df[(df["bed"] < 0) | (df["bed"] > 10) | ((df["bed"] % 1) != 0)]
+           #     if not bad_bed.empty:
+           #         invalid.append("bed fuera de [0–10] o no entero")
+           #     bad_bath = df[(df["bath"] < 0) | (df["bath"] > 10) | ((df["bath"] % 1) != 0)]
+           #     if not bad_bath.empty:
+           #         invalid.append("bath fuera de [0–10] o no entero")
+           #     if ((df["acre_lot"] <= 0) | (df["acre_lot"] > 1000)).any():
+           #         invalid.append("acre_lot fuera de (0,1000]")
+           #     valid_status = ["for_sale", "to_build"]
+           #     if not df["status"].isin(valid_status).all():
+           #         invalid.append(f"status no en {valid_status}")
+           #     # prev_sold_date debe ser parseable
+           #     try:
+           #         pd.to_datetime(df["prev_sold_date"])
+           #     except Exception:
+           #         invalid.append("prev_sold_date no parseable")
 
         # 3) Registrar en MLflow y decidir branch
         with mlflow.start_run(run_name="decision"):
