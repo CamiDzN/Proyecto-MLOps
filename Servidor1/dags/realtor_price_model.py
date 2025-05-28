@@ -8,6 +8,7 @@ from sqlalchemy.exc import ProgrammingError
 from sklearn.linear_model import LinearRegression
 from sklearn.metrics import mean_squared_error
 import mlflow
+import logging
 
 from airflow import DAG
 from airflow.operators.python import PythonOperator, BranchPythonOperator
