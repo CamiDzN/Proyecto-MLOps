@@ -31,12 +31,16 @@ with DAG(
     tags=["realtor", "mlflow"],
 ) as dag:
 
+
     def extract_data(**context):
         """
         Llama a /data?group_number=7&day=Tuesday.
-        Solo si la respuesta es HTTP 400 con el mensaje de fin marca finished=True.
-        En cualquier otro caso (lista vacía o datos), finished=False.
+        - Loguea resp.text completo.
+        - Loguea tipo y primeros elementos del payload.
+        - Inserta filas nuevas en realtor_raw.
+        - Sólo si recibes HTTP 400 con el mensaje de fin marcas finished=True.
         """
+        # Conexión a RawData
         RAW_URI = os.getenv("AIRFLOW_CONN_MYSQL_DEFAULT")
         engine = create_engine(RAW_URI)
 
@@ -47,40 +51,52 @@ with DAG(
         new_records = 0
 
         try:
+            # 1) Petición y log de texto crudo
             resp = requests.get(url, params=params)
-            resp.raise_for_status()
-            rows = resp.json()
-            logging.info(f"extract_data → recibí {len(rows)} filas")
+            logging.info(f"extract_data → HTTP {resp.status_code} response.text:\n{resp.text}")
 
-            # Si vienen filas, las guardo
-            if isinstance(rows, list) and rows:
-                df = pd.DataFrame(rows)
+            # 2) Forzar error si status >= 400
+            resp.raise_for_status()
+
+            # 3) Parse JSON y log de estructura
+            payload = resp.json()
+            logging.info(f"extract_data → payload type: {type(payload)}")
+            if isinstance(payload, list):
+                logging.info(f"extract_data → payload len={len(payload)}; primeros 5: {payload[:5]}")
+            elif isinstance(payload, dict):
+                logging.info(f"extract_data → payload dict keys: {list(payload.keys())}")
+
+            # 4) Si vienen filas, las guardo
+            if isinstance(payload, list) and payload:
+                df = pd.DataFrame(payload)
                 df["fetched_at"] = datetime.datetime.utcnow()
                 df.to_sql("realtor_raw", con=engine, if_exists="append", index=False)
-                new_records = len(rows)
-            # Si es lista vacía, new_records queda en 0, pero finished sigue False
+                new_records = len(payload)
+                logging.info(f"extract_data → insertadas {new_records} filas en realtor_raw")
+            else:
+                # lista vacía = no new_records, pero NOT finished
+                logging.info("extract_data → payload es lista vacía; new_records=0 y finished sigue False")
 
         except requests.exceptions.HTTPError as e:
-            # Sólo el 400 con el detalle “Ya se recolectó…” marca fin
+            # 5) Sólo el 400 con el detalle de fin marca finished=True
             resp = e.response
             if resp is not None and resp.status_code == 400:
-                detail = ""
                 try:
                     detail = resp.json().get("detail", "")
                 except ValueError:
                     detail = resp.text
+                logging.info(f"extract_data → HTTP 400 detalle: {detail!r}")
                 if "Ya se recolectó toda la información mínima necesaria" in detail:
-                    logging.info("extract_data → fin de datos detectado por HTTP 400")
                     finished = True
+                    logging.info("extract_data → fin de datos detectado; marcar finished=True")
             else:
-                # cualquier otro error HTTP lo propagamos
+                # cualquier otro error lo propagamos
                 raise
 
-        # Publiquemos en XCom
+        # 6) Publicar en XCom
         ti = context["ti"]
         ti.xcom_push(key="new_records", value=new_records)
         ti.xcom_push(key="finished", value=finished)
-
 
     extract_task = PythonOperator(
         task_id="extract_data",
