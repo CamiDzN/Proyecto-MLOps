@@ -14,15 +14,15 @@ spec:
     spec:
       containers:
       - name: prometheus
-        image: luiscacyber/grafana:initial
+        image: camidzn/prometheus:initial
         args:
           - "--config.file=/etc/prometheus/prometheus.yml"
         ports:
-        - containerPort: 9090
+          - containerPort: 9090
         volumeMounts:
-        - name: config
-          mountPath: /etc/prometheus
+          - name: config
+            mountPath: /etc/prometheus
       volumes:
-      - name: config
-        configMap:
-          name: prometheus-config
+        - name: config
+          configMap:
+            name: prometheus-config

@@ -1,30 +1,24 @@
+# CI trigger test 7
+
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+
 resources:
+- grafana-configmap.yaml
 - grafana-deployment.yaml
 - grafana-service.yaml
-- grafana-configmap.yaml
+- prometheus-configmap.yaml
 - prometheus-deployment.yaml
 - prometheus-service.yaml
-- prometheus-configmap.yaml
 - streamlit-deployment.yaml
 - streamlit-service.yaml
 
 images:
-- name: camidzn/fastapi
-  newTag: 20250526-2
+- name: luiscacyber/fastapi
+  newTag: 20250526-dc72292
 - name: camidzn/grafana
   newTag: 20250526-2
 - name: camidzn/prometheus
   newTag: 20250526-2
 - name: camidzn/streamlit-app
-  newTag: 20250526-2
-- name: your-dhub-user/grafana
-  newName: your-dhub-user/grafana
-  newTag: initial
-- name: your-dhub-user/prometheus
-  newName: your-dhub-user/prometheus
-  newTag: initial
-- name: your-dhub-user/streamlit-app
-  newName: your-dhub-user/streamlit-app
-  newTag: initial
-apiVersion: kustomize.config.k8s.io/v1beta1
-kind: Kustomization
+  newTag: 20250527-6
