@@ -8,6 +8,7 @@ from sqlalchemy.exc import ProgrammingError
 from sklearn.linear_model import LinearRegression
 from sklearn.metrics import mean_squared_error
 import mlflow
+import mlflow.sklearn
 import logging
 
 from airflow import DAG
@@ -162,108 +163,96 @@ with DAG(
 
     def decide_train(**context):
         """
-        BranchPythonOperator para decidir:
-        - si new_records == 0  → no_train (tarea end_no_train)
-        - si hay errores de validación → no_train
-        - si new_records > 100 → train      (tarea split_data)
-        - en otros casos → no_train
-        Además registra toda la info en MLflow.
+        BranchPythonOperator para decidir si entrenar:
+        - new_records == 0          → end_no_train
+        - validaciones sobre FEATURES → end_no_train
+        - new_records > 100         → split_data
+        - en otros casos           → end_no_train
+
+        Además registra en MLflow:
+        - métrica new_records
+        - tags: decision, reason, dag_run_id, execution_date
         """
         ti = context["ti"]
+        dag_run = context["dag_run"]
         new_records = ti.xcom_pull(key="new_records", task_ids="extract_data") or 0
 
-        # 1) Early exit sin datos nuevos
+        # Early exit sin datos nuevos
         if new_records == 0:
-            mlflow.set_tracking_uri(os.getenv("AIRFLOW_VAR_MLFLOW_TRACKING_URI"))
-            mlflow.set_experiment("Realtor_Price")
             with mlflow.start_run(run_name="decision"):
                 mlflow.log_metric("new_records", 0)
                 mlflow.set_tag("decision", "end_no_train")
                 mlflow.set_tag("reason", "0 new records")
+                mlflow.set_tag("dag_run_id", dag_run.run_id)
+                mlflow.set_tag("execution_date", context["execution_date"].isoformat())
             return "end_no_train"
 
-        # 2) Leer últimas filas de realtor_raw
-        RAW_URI = os.getenv("AIRFLOW_CONN_MYSQL_DEFAULT")
-        engine = create_engine(RAW_URI)
-        sql = text("""
-            SELECT *
-            FROM realtor_raw
-            ORDER BY fetched_at DESC
-            LIMIT :n
-        """)
-        df = pd.read_sql(sql, con=engine, params={"n": new_records})
+        # 1) Leer los últimos new_records
+        engine = create_engine(os.getenv("AIRFLOW_CONN_MYSQL_DEFAULT"))
+        df = pd.read_sql(
+            text("""
+                SELECT *
+                FROM realtor_raw
+                ORDER BY fetched_at DESC
+                LIMIT :n
+            """),
+            con=engine,
+            params={"n": new_records},
+        )
 
-        # 3) Validaciones de esquema y contenido
-        required_cols = [
-            "brokered_by", "status", "price", "bed", "bath",
-            "acre_lot", "street", "city", "state",
-            "zip_code", "house_size", "prev_sold_date"
-        ]
-        invalid_reasons = []
+        # 2) Validaciones sólo sobre las columnas que usaremos después
+        features = ["status", "bed", "bath", "acre_lot", "house_size", "prev_sold_date", "price"]
+        invalid = []
 
-        # 3.1 Columnas faltantes
-        missing = set(required_cols) - set(df.columns)
+        # 2.1) Columnas faltantes
+        missing = set(features) - set(df.columns)
         if missing:
-            invalid_reasons.append(f"Faltan columnas: {sorted(missing)}")
+            invalid.append(f"Faltan columnas: {sorted(missing)}")
 
-        # 3.2 Nulos en columna requerida
         if not missing:
-            nulls = df[required_cols].isnull().any()
+            # 2.2) Nulos
+            nulls = df[features].isnull().any()
             if nulls.any():
-                invalid_reasons.append(f"Nulos en: {nulls[nulls].index.tolist()}")
+                invalid.append(f"Nulos en: {nulls[nulls].index.tolist()}")
 
-        # 3.3 Rangos plausibles
-        if not df.empty and not missing:
-            # price > 0
-            if (df["price"] <= 0).any():
-                invalid_reasons.append("price ≤ 0")
-            # bed y bath en [0,10], enteros
-            bad_bed = df[~df["bed"].apply(float.is_integer) | (df["bed"] < 0) | (df["bed"] > 10)]
-            if not bad_bed.empty:
-                invalid_reasons.append("bed fuera de [0–10] o no entero")
-            bad_bath = df[~df["bath"].apply(float.is_integer) | (df["bath"] < 0) | (df["bath"] > 10)]
-            if not bad_bath.empty:
-                invalid_reasons.append("bath fuera de [0–10] o no entero")
-            # acre_lot en (0,1000]
-            if ((df["acre_lot"] <= 0) | (df["acre_lot"] > 1000)).any():
-                invalid_reasons.append("acre_lot fuera de (0,1000]")
-            # house_size > 0
-            if (df["house_size"] <= 0).any():
-                invalid_reasons.append("house_size ≤ 0")
-            # status solo a o b
-            if not df["status"].isin(["a", "b"]).all():
-                invalid_reasons.append("status no en {'a','b'}")
-            # zip_code 5+ dígitos
-            bad_zip = df[~df["zip_code"].astype(str).str.match(r"^\d{5,}$")]
-            if not bad_zip.empty:
-                invalid_reasons.append("zip_code inválido")
-            # prev_sold_date parseable
-            try:
-                pd.to_datetime(df["prev_sold_date"])
-            except Exception:
-                invalid_reasons.append("prev_sold_date no parseable")
+            # 2.3) Rangos y formatos (solo si no hay nulos)
+            if not nulls.any():
+                if (df["price"] <= 0).any():
+                    invalid.append("price ≤ 0")
+                bad_bed = df[(df["bed"] < 0) | (df["bed"] > 10) | ((df["bed"] % 1) != 0)]
+                if not bad_bed.empty:
+                    invalid.append("bed fuera de [0–10] o no entero")
+                bad_bath = df[(df["bath"] < 0) | (df["bath"] > 10) | ((df["bath"] % 1) != 0)]
+                if not bad_bath.empty:
+                    invalid.append("bath fuera de [0–10] o no entero")
+                if ((df["acre_lot"] <= 0) | (df["acre_lot"] > 1000)).any():
+                    invalid.append("acre_lot fuera de (0,1000]")
+                valid_status = ["for_sale", "to_build"]
+                if not df["status"].isin(valid_status).all():
+                    invalid.append(f"status no en {valid_status}")
+                # prev_sold_date debe ser parseable
+                try:
+                    pd.to_datetime(df["prev_sold_date"])
+                except Exception:
+                    invalid.append("prev_sold_date no parseable")
 
-        # 4) Registrar en MLflow y decidir branch
-        mlflow.set_tracking_uri(os.getenv("AIRFLOW_VAR_MLFLOW_TRACKING_URI"))
-        mlflow.set_experiment("Realtor_Price")
+        # 3) Registrar en MLflow y decidir branch
         with mlflow.start_run(run_name="decision"):
             mlflow.log_metric("new_records", new_records)
+            mlflow.set_tag("dag_run_id", dag_run.run_id)
+            mlflow.set_tag("execution_date", context["execution_date"].isoformat())
 
-            if invalid_reasons:
-                branch = "end_no_train"
-                reason = " & ".join(invalid_reasons)
+            if invalid:
+                branch, reason = "end_no_train", " & ".join(invalid)
             elif new_records > 100:
-                branch = "split_data"
-                reason = f"{new_records} nuevos > 100"
+                branch, reason = "split_data", f"{new_records} nuevos > 100"
             else:
-                branch = "end_no_train"
-                reason = f"{new_records} nuevos ≤ 100"
+                branch, reason = "end_no_train", f"{new_records} nuevos ≤ 100"
 
             mlflow.set_tag("decision", branch)
             mlflow.set_tag("reason", reason)
 
         return branch
-
 
     decide_task = BranchPythonOperator(
         task_id="decide_to_train",
@@ -271,119 +260,213 @@ with DAG(
         provide_context=True,
     )
 
+
+    # ──────────────────────────────────────────────────────────────────────────────
+    # 1) split_data: usa TODO realtor_raw para repartir 60/20/20 y sobreescribe
+    #    las tablas train, validation y test en la misma BD de RawData.
+    # ──────────────────────────────────────────────────────────────────────────────
     def split_data():
-        """
-        Lee realtor_raw de RawData, lo mezcla aleatoriamente y lo divide:
-        60% train, 20% val, 20% test. Escribe en tres tablas en la misma BD.
-        """
         RAW_URI = os.getenv("AIRFLOW_CONN_MYSQL_DEFAULT")
-        engine = create_engine(RAW_URI)
+        engine  = create_engine(RAW_URI)
 
-        df = pd.read_sql_table("realtor_raw", con=engine).sample(frac=1, random_state=42)
-        n = len(df)
-        train_df = df.iloc[: int(0.6 * n)]
-        val_df = df.iloc[int(0.6 * n) : int(0.8 * n)]
-        test_df = df.iloc[int(0.8 * n) :]
+        # 1.1) Cargo TODO el histórico
+        df = pd.read_sql_table("realtor_raw", con=engine)
+        n  = len(df)
+        logging.info(f"split_data → {n} registros totales en realtor_raw")
 
+        if n == 0:
+            logging.info("split_data → No hay datos en realtor_raw, saliendo.")
+            return
+
+        # 1.2) Mezclo y parto
+        df = df.sample(frac=1, random_state=42)
+        i1 = int(0.6 * n)
+        i2 = int(0.8 * n)
+        train_df = df.iloc[:i1]
+        val_df   = df.iloc[i1:i2]
+        test_df  = df.iloc[i2:]
+
+        # 1.3) Sobrescribo los splits en RawData
         with engine.begin() as conn:
-            train_df.to_sql("train", conn, if_exists="replace", index=False)
-            val_df.to_sql("validation", conn, if_exists="replace", index=False)
-            test_df.to_sql("test", conn, if_exists="replace", index=False)
+            train_df.to_sql( "train",      conn, if_exists="replace", index=False)
+            val_df.to_sql(   "validation", conn, if_exists="replace", index=False)
+            test_df.to_sql(  "test",       conn, if_exists="replace", index=False)
+
+        logging.info(
+            f"split_data → splits escritos: "
+            f"train={len(train_df)}, val={len(val_df)}, test={len(test_df)}"
+        )
 
     split_task = PythonOperator(
         task_id="split_data",
         python_callable=split_data,
     )
 
+
+    # ──────────────────────────────────────────────────────────────────────────────
+    # 2) preprocess_data: lee los splits recién recreados en RawData,
+    #    aplica tu función _prep, y sobrescribe los splits en CleanData.
+    # ──────────────────────────────────────────────────────────────────────────────
     def preprocess_data():
-        """
-        Toma Train/Val/Test de RawData y aplica un preprocessing simple:
-        - forward-fill y fillna(0)
-        - one-hot encoding de categóricas
-        Almacena en CleanData tablas train_clean, validation_clean, test_clean.
-        """
-        RAW_URI = os.getenv("AIRFLOW_CONN_MYSQL_DEFAULT")
+        RAW_URI   = os.getenv("AIRFLOW_CONN_MYSQL_DEFAULT")
         CLEAN_URI = os.getenv("AIRFLOW_CONN_MYSQL_CLEAN")
-        engine_raw = create_engine(RAW_URI)
+        engine_raw   = create_engine(RAW_URI)
         engine_clean = create_engine(CLEAN_URI)
 
-        def _prep(df):
-            df = df.fillna(method="ffill").fillna(0)
-            cat_cols = df.select_dtypes(include=["object"]).columns
-            return pd.get_dummies(df, columns=cat_cols, drop_first=True)
+        def _prep(df: pd.DataFrame) -> pd.DataFrame:
+            # 1) Rellenar numéricos
+            num_cols = ["bed","bath","acre_lot","house_size","price"]
+            df[num_cols] = df[num_cols].fillna(method="ffill").fillna(0)
 
-        for name in ["train", "validation", "test"]:
-            df = pd.read_sql_table(name, con=engine_raw)
-            df_clean = _prep(df)
+            # 2) days_since_last_sale
+            df["prev_sold_date"] = pd.to_datetime(df["prev_sold_date"], errors="coerce")
+            df["days_since_last_sale"] = (
+                pd.Timestamp.utcnow() - df["prev_sold_date"]
+            ).dt.days.fillna(-1).astype(int)
+
+            # 3) One-hot de status
+            df = pd.get_dummies(df, columns=["status"], drop_first=True)
+
+            # 4) Eliminar columnas de alta cardinalidad
+            drop_cols = [
+                "brokered_by",
+                "street",
+                "zip_code",
+                "city",
+                "state",
+                "prev_sold_date",
+            ]
+            df = df.drop(columns=[c for c in drop_cols if c in df.columns])
+
+            # 5) Poner price al final
+            if "price" in df.columns:
+                cols = [c for c in df.columns if c != "price"] + ["price"]
+                df = df[cols]
+
+            return df
+
+        for split in ["train","validation","test"]:
+            # 2.1) Leer el split crudo
+            df_raw = pd.read_sql_table(split, con=engine_raw)
+            logging.info(f"preprocess_data → {split}: {len(df_raw)} filas crudas")
+
+            # 2.2) Preprocesar
+            df_clean = _prep(df_raw)
+            logging.info(f"preprocess_data → {split}: {len(df_clean)} filas limpias")
+
+            # 2.3) Sobrescribir el split limpio
             with engine_clean.begin() as conn:
-                df_clean.to_sql(f"{name}_clean", conn, if_exists="replace", index=False)
+                df_clean.to_sql(
+                    f"{split}_clean",
+                    conn,
+                    if_exists="replace",
+                    index=False
+                )
+            logging.info(f"preprocess_data → {split}_clean actualizado con {len(df_clean)} filas")
 
     preprocess_task = PythonOperator(
         task_id="preprocess_data",
         python_callable=preprocess_data,
     )
 
-    def train_and_register():
+    def train_and_register(**context):
         """
-        Entrena un LinearRegression sobre clean data, evalúa RMSE en Val/Test,
-        compara con el mejor run anterior en MLflow y promueve si mejora.
+        - Carga train/validation/test de CleanData.
+        - Entrena LinearRegression.
+        - Calcula RMSE en val y test.
+        - Compara contra best run previo en MLflow.
+        - Registra métricas, tags (incluyendo dag_run_id y execution_date) y modelo.
         """
+        ti      = context["ti"]
+        dag_run = context["dag_run"]
+
+        # 1) Leer datos
         CLEAN_URI = os.getenv("AIRFLOW_CONN_MYSQL_CLEAN")
-        engine = create_engine(CLEAN_URI)
+        engine    = create_engine(CLEAN_URI)
 
-        df_train = pd.read_sql_table("train_clean", con=engine)
-        df_val = pd.read_sql_table("validation_clean", con=engine)
-        df_test = pd.read_sql_table("test_clean", con=engine)
+        df_train = pd.read_sql_table("train_clean",      con=engine)
+        df_val   = pd.read_sql_table("validation_clean", con=engine)
+        df_test  = pd.read_sql_table("test_clean",       con=engine)
 
+        logging.info(
+            f"train_and_register → tamaños: "
+            f"train={len(df_train)}, val={len(df_val)}, test={len(df_test)}"
+        )
         X_train, y_train = df_train.drop("price", axis=1), df_train["price"]
-        X_val, y_val = df_val.drop("price", axis=1), df_val["price"]
-        X_test, y_test = df_test.drop("price", axis=1), df_test["price"]
+        X_val,   y_val   = df_val.drop("price", axis=1),   df_val["price"]
+        X_test,  y_test  = df_test.drop("price", axis=1),  df_test["price"]
 
-        mlflow_uri = os.getenv("AIRFLOW_VAR_MLFLOW_TRACKING_URI")
-        mlflow.set_tracking_uri(mlflow_uri)
+        # 2) Configurar MLflow
+        mlflow.set_tracking_uri(os.getenv("AIRFLOW_VAR_MLFLOW_TRACKING_URI"))
         mlflow.set_experiment("Realtor_Price")
 
-        with mlflow.start_run(run_name="train"):
+        with mlflow.start_run(run_name="train") as run:
+            # 3) Entrenar
             model = LinearRegression().fit(X_train, y_train)
-            val_rmse = np.sqrt(mean_squared_error(y_val, model.predict(X_val)))
-            test_rmse = np.sqrt(mean_squared_error(y_test, model.predict(X_test)))
 
-            mlflow.log_metric("val_rmse", val_rmse)
+            # 4) Evaluar
+            val_rmse  = np.sqrt(mean_squared_error(y_val,   model.predict(X_val)))
+            test_rmse = np.sqrt(mean_squared_error(y_test,  model.predict(X_test)))
+
+            # 5) Log métricas
+            mlflow.log_metric("val_rmse",  val_rmse)
             mlflow.log_metric("test_rmse", test_rmse)
-            mlflow.sklearn.log_model(model, "model")
 
-            # buscar el mejor run previo
-            exp = mlflow.get_experiment_by_name("Realtor_Price")
-            best = mlflow.search_runs(
-                [exp.experiment_id], order_by=["metrics.test_rmse ASC"], max_results=1
+            # 6) Log del modelo
+            mlflow.sklearn.log_model(
+                sk_model=model,
+                artifact_path="model",
+                registered_model_name="RealtorPriceModel"
+            )
+
+            # 7) Comparar con mejor run previo
+            exp     = mlflow.get_experiment_by_name("Realtor_Price")
+            best    = mlflow.search_runs(
+                [exp.experiment_id],
+                order_by=["metrics.test_rmse ASC"],
+                max_results=1
             )
             best_rmse = best["metrics.test_rmse"][0] if not best.empty else None
 
-            if best_rmse is None or test_rmse < best_rmse:
-                mlflow.set_tag("promoted", "true")
-            else:
-                mlflow.set_tag("promoted", "false")
-
+            # 8) Decidir promoción
+            promoted = best_rmse is None or test_rmse < best_rmse
+            mlflow.set_tag("promoted", "true" if promoted else "false")
             mlflow.set_tag("previous_best_rmse", str(best_rmse))
-            mlflow.set_tag("current_rmse", str(test_rmse))
+            mlflow.set_tag("current_rmse",      str(test_rmse))
+
+            # 9) Añadir tags de orquestación
+            mlflow.set_tag("dag_run_id",      dag_run.run_id)
+            mlflow.set_tag("execution_date",  context["execution_date"].isoformat())
+
+        logging.info(f"train_and_register → run_id={run.info.run_id} promoted={promoted}")
 
     train_task = PythonOperator(
         task_id="train_and_register",
         python_callable=train_and_register,
+        provide_context=True,
     )
 
-    # ruta alternativa cuando no entrenamos
-    end_no_train = EmptyOperator(task_id="end_no_train")
+# ruta alternativa cuando no entrenamos
+end_no_train = EmptyOperator(task_id="end_no_train")
 
-    # punto final común
-    end = EmptyOperator(
-        task_id="end",
-        trigger_rule=TriggerRule.NONE_FAILED_MIN_ONE_SUCCESS,
-    )
+# ruta de reset, ahora bien definida
+end_after_reset = EmptyOperator(task_id="end_after_reset")
+
+# punto final común
+end = EmptyOperator(
+    task_id="end",
+    trigger_rule=TriggerRule.NONE_FAILED_MIN_ONE_SUCCESS,
+)
 
 # Flujo
-    extract_task >> branch_exhaust
-    branch_exhaust >> reset_task >> EmptyOperator(task_id="end_after_reset")
-    branch_exhaust >> decide_task  
-    decide_task >> split_task >> preprocess_task >> train_task >> end
-    decide_task >> end_no_train >> end
+extract_task >> branch_exhaust
+
+# -- rama reset --
+branch_exhaust >> reset_task >> end_after_reset >> end
+
+# -- rama entrenamiento --
+branch_exhaust >> decide_task
+decide_task    >> split_task >> preprocess_task >> train_task >> end
+
+# -- rama no-train --
+decide_task    >> end_no_train >> end
