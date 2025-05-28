@@ -14,11 +14,13 @@ resources:
 - streamlit-service.yaml
 
 images:
+- name: camidzn/fastapi
+  newTag: 20250528-7
+- name: camidzn/grafana
+  newTag: 20250528-7
+- name: camidzn/prometheus
+  newTag: 20250528-7
+- name: camidzn/streamlit-app
+  newTag: 20250528-7
 - name: luiscacyber/fastapi
   newTag: 20250526-dc72292
-- name: camidzn/grafana
-  newTag: 20250526-2
-- name: camidzn/prometheus
-  newTag: 20250526-2
-- name: camidzn/streamlit-app
-  newTag: 20250527-6
