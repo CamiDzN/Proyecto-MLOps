@@ -35,12 +35,10 @@ with DAG(
     def extract_data(**context):
         """
         Llama a /data?group_number=7&day=Tuesday.
-        - Loguea resp.text completo.
-        - Loguea tipo y primeros elementos del payload.
-        - Inserta filas nuevas en realtor_raw.
-        - Sólo si recibes HTTP 400 con el mensaje de fin marcas finished=True.
+        - Si viene un dict con 'data', extrae la lista de payload['data'].
+        - Inserta sólo rows > 0.
+        - Sólo el HTTP 400 con el mensaje de fin marca finished=True.
         """
-        # Conexión a RawData
         RAW_URI = os.getenv("AIRFLOW_CONN_MYSQL_DEFAULT")
         engine = create_engine(RAW_URI)
 
@@ -51,36 +49,37 @@ with DAG(
         new_records = 0
 
         try:
-            # 1) Petición y log de texto crudo
             resp = requests.get(url, params=params)
             logging.info(f"extract_data → HTTP {resp.status_code} response.text:\n{resp.text}")
-
-            # 2) Forzar error si status >= 400
             resp.raise_for_status()
 
-            # 3) Parse JSON y log de estructura
             payload = resp.json()
-            logging.info(f"extract_data → payload type: {type(payload)}")
-            if isinstance(payload, list):
-                logging.info(f"extract_data → payload len={len(payload)}; primeros 5: {payload[:5]}")
-            elif isinstance(payload, dict):
-                logging.info(f"extract_data → payload dict keys: {list(payload.keys())}")
+            logging.info(f"extract_data → payload type: {type(payload)}, keys: {getattr(payload, 'keys', lambda: '')()}")
 
-            # 4) Si vienen filas, las guardo
-            if isinstance(payload, list) and payload:
-                df = pd.DataFrame(payload)
+            # 1) Extraer rows bien sea lista directa o dentro de payload['data']
+            if isinstance(payload, dict) and "data" in payload:
+                rows = payload["data"] or []
+            elif isinstance(payload, list):
+                rows = payload
+            else:
+                rows = []
+
+            logging.info(f"extract_data → rows extraídas (len): {len(rows)}")
+
+            # 2) Insertar sólo si llega algo
+            if rows:
+                df = pd.DataFrame(rows)
                 df["fetched_at"] = datetime.datetime.utcnow()
                 df.to_sql("realtor_raw", con=engine, if_exists="append", index=False)
-                new_records = len(payload)
+                new_records = len(rows)
                 logging.info(f"extract_data → insertadas {new_records} filas en realtor_raw")
             else:
-                # lista vacía = no new_records, pero NOT finished
-                logging.info("extract_data → payload es lista vacía; new_records=0 y finished sigue False")
+                logging.info("extract_data → no hay filas nuevas (rows vacío), finished sigue False")
 
         except requests.exceptions.HTTPError as e:
-            # 5) Sólo el 400 con el detalle de fin marca finished=True
             resp = e.response
             if resp is not None and resp.status_code == 400:
+                # Sólo este 400 concreto marca fin
                 try:
                     detail = resp.json().get("detail", "")
                 except ValueError:
@@ -90,13 +89,13 @@ with DAG(
                     finished = True
                     logging.info("extract_data → fin de datos detectado; marcar finished=True")
             else:
-                # cualquier otro error lo propagamos
                 raise
 
-        # 6) Publicar en XCom
+        # 3) Guardar en XCom
         ti = context["ti"]
         ti.xcom_push(key="new_records", value=new_records)
         ti.xcom_push(key="finished", value=finished)
+
 
     extract_task = PythonOperator(
         task_id="extract_data",
