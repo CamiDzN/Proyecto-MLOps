@@ -13,4 +13,4 @@ resources:
 images:
 - name: danirc27/mlflow-custom
   newName: camidzn/mlflow-custom
-  newTag: 20250527-1
+  newTag: 20250528-2
