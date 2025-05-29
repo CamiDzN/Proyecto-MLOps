@@ -5,8 +5,9 @@ import pandas as pd
 import numpy as np
 from sqlalchemy import create_engine, text, inspect
 from sqlalchemy.exc import ProgrammingError
-from sklearn.linear_model import LinearRegression
+from sklearn.linear_model import LinearRegression, Ridge
 from sklearn.metrics import mean_squared_error
+from sklearn.model_selection import GridSearchCV
 import mlflow
 import mlflow.sklearn
 import logging
@@ -383,76 +384,85 @@ with DAG(
         python_callable=preprocess_data,
     )
 
+
     def train_and_register(**context):
-        """
-        - Carga train/validation/test de CleanData.
-        - Entrena LinearRegression.
-        - Calcula RMSE en val y test.
-        - Compara contra best run previo en MLflow.
-        - Registra métricas, tags (incluyendo dag_run_id y execution_date) y modelo.
-        """
         ti      = context["ti"]
         dag_run = context["dag_run"]
 
-        # 1) Leer datos
-        CLEAN_URI = os.getenv("AIRFLOW_CONN_MYSQL_CLEAN")
-        engine    = create_engine(CLEAN_URI)
-
+        # 1) Cargo los datos
+        engine = create_engine(os.getenv("AIRFLOW_CONN_MYSQL_CLEAN"))
         df_train = pd.read_sql_table("train_clean",      con=engine)
         df_val   = pd.read_sql_table("validation_clean", con=engine)
         df_test  = pd.read_sql_table("test_clean",       con=engine)
 
-        logging.info(
-            f"train_and_register → tamaños: "
-            f"train={len(df_train)}, val={len(df_val)}, test={len(df_test)}"
-        )
         X_train, y_train = df_train.drop("price", axis=1), df_train["price"]
         X_val,   y_val   = df_val.drop("price", axis=1),   df_val["price"]
         X_test,  y_test  = df_test.drop("price", axis=1),  df_test["price"]
 
-        # 2) Configurar MLflow
+        # 2) Configuro MLflow
         mlflow.set_tracking_uri(os.getenv("AIRFLOW_VAR_MLFLOW_TRACKING_URI"))
         mlflow.set_experiment("Realtor_Price")
 
-        with mlflow.start_run(run_name="train") as run:
-            # 3) Entrenar
-            model = LinearRegression().fit(X_train, y_train)
+        # 3) Defino GridSearch sobre Ridge (L2) buscando α que minimice RMSE en validation
+        alphas = [0.01, 0.1, 1.0, 10.0, 100.0]
+        ridge = Ridge()
+        grid  = GridSearchCV(
+            ridge,
+            param_grid={"alpha": alphas},
+            cv=[(slice(None), slice(None))],  
+            # lo entrenamos en el train y medimos en val manualmente
+            scoring="neg_root_mean_squared_error",
+            refit=False
+        )
 
-            # 4) Evaluar
-            val_rmse  = np.sqrt(mean_squared_error(y_val,   model.predict(X_val)))
-            test_rmse = np.sqrt(mean_squared_error(y_test,  model.predict(X_test)))
+        # Para usar train+val en la búsqueda, concatenar ambos:
+        X_trval = pd.concat([X_train, X_val], axis=0)
+        y_trval = pd.concat([y_train, y_val], axis=0)
 
-            # 5) Log métricas
-            mlflow.log_metric("val_rmse",  val_rmse)
+        grid.fit(X_trval, y_trval)
+
+        best_alpha = grid.best_params_["alpha"]
+        # Ahora ajusto un modelo definitivo sobre train+val con ese alpha:
+        final_model = Ridge(alpha=best_alpha).fit(X_trval, y_trval)
+
+        # 4) Evalúo en test
+        test_rmse = mean_squared_error(y_test, final_model.predict(X_test), squared=False)
+
+        # 5) Logueo todo en MLflow
+        with mlflow.start_run(run_name=f"train__{dag_run.run_id}") as run:
+            run_id = run.info.run_id
+
+            mlflow.log_param("best_alpha", best_alpha)
             mlflow.log_metric("test_rmse", test_rmse)
 
-            # 6) Log del modelo
             mlflow.sklearn.log_model(
-                sk_model=model,
+                sk_model=final_model,
                 artifact_path="model",
                 registered_model_name="RealtorPriceModel"
             )
 
-            # 7) Comparar con mejor run previo
-            exp     = mlflow.get_experiment_by_name("Realtor_Price")
-            best    = mlflow.search_runs(
-                [exp.experiment_id],
-                order_by=["metrics.test_rmse ASC"],
-                max_results=1
-            )
-            best_rmse = best["metrics.test_rmse"][0] if not best.empty else None
+        # 6) Comparo contra el mejor run anterior (excluyendo éste)
+        exp = mlflow.get_experiment_by_name("Realtor_Price")
+        best = mlflow.search_runs(
+            [exp.experiment_id],
+            filter_string=f"attributes.run_id != '{run_id}'",
+            order_by=["metrics.test_rmse ASC"],
+            max_results=1,
+        )
+        best_rmse = best["metrics.test_rmse"].iloc[0] if not best.empty else None
+        promoted = (best_rmse is None) or (test_rmse < best_rmse)
 
-            # 8) Decidir promoción
-            promoted = best_rmse is None or test_rmse < best_rmse
-            mlflow.set_tag("promoted", "true" if promoted else "false")
-            mlflow.set_tag("previous_best_rmse", str(best_rmse))
-            mlflow.set_tag("current_rmse",      str(test_rmse))
+        # 7) Taggeo en el run actual
+        mlflow.start_run(run_id=run_id)
+        mlflow.set_tag("dag_run_id",      dag_run.run_id)
+        mlflow.set_tag("execution_date",  context["execution_date"].isoformat())
+        mlflow.set_tag("previous_best_rmse", str(best_rmse))
+        mlflow.set_tag("current_rmse",      str(test_rmse))
+        mlflow.set_tag("promoted",          "true" if promoted else "false")
+        mlflow.end_run()
 
-            # 9) Añadir tags de orquestación
-            mlflow.set_tag("dag_run_id",      dag_run.run_id)
-            mlflow.set_tag("execution_date",  context["execution_date"].isoformat())
-
-        logging.info(f"train_and_register → run_id={run.info.run_id} promoted={promoted}")
+        logging.info(f"train_and_register → α={best_alpha} | test_rmse={test_rmse:.2f} | "
+                    f"best_prev={best_rmse:.2f} → promoted={promoted}")
 
     train_task = PythonOperator(
         task_id="train_and_register",
