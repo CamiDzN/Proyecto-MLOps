@@ -389,7 +389,7 @@ with DAG(
         ti      = context["ti"]
         dag_run = context["dag_run"]
 
-        # 1) Cargar datos limpios desde CleanData
+        # 1) Leer datos limpios desde CleanData
         CLEAN_URI = os.getenv("AIRFLOW_CONN_MYSQL_CLEAN")
         engine    = create_engine(CLEAN_URI)
         df_train  = pd.read_sql_table("train_clean",      con=engine)
@@ -400,44 +400,46 @@ with DAG(
         X_val,   y_val   = df_val.drop("price", axis=1),   df_val["price"]
         X_test,  y_test  = df_test.drop("price", axis=1),  df_test["price"]
 
+        logging.info(
+            f"train_and_register → tamaños: "
+            f"train={len(df_train)}, val={len(df_val)}, test={len(df_test)}"
+        )
+
         # 2) Configurar MLflow
         mlflow.set_tracking_uri(os.getenv("AIRFLOW_VAR_MLFLOW_TRACKING_URI"))
         mlflow.set_experiment("Realtor_Price")
 
-        # 3) Definir lista de alphas a probar
+        # 3) Lista de alphas a probar
         alphas = [0.01, 0.1, 1.0, 10.0, 100.0]
-        best_alpha   = None
+        best_alpha    = None
         best_val_rmse = float("inf")
 
-        # 4) Primer run: búsqueda manual de alpha
+        # 4) Primera corrida: búsqueda manual de alpha
         with mlflow.start_run(run_name=f"train__{dag_run.run_id}") as run:
             current_run_id = run.info.run_id
 
             for α in alphas:
-                # Entrenar un Ridge con alpha = α
                 m = Ridge(alpha=α).fit(X_train, y_train)
-                rmse_val = mean_squared_error(y_val, m.predict(X_val), squared=False)
+                rmse_val = np.sqrt(mean_squared_error(y_val, m.predict(X_val)))
 
-                # Log de la métrica para este α
                 mlflow.log_metric(f"val_rmse_alpha_{α}", rmse_val)
 
-                # Actualizar mejor α
                 if rmse_val < best_val_rmse:
                     best_val_rmse = rmse_val
                     best_alpha    = α
 
-            # 5) Volver a entrenar con train+val usando el best_alpha
+            # 5) Reentrenar con train+val usando best_alpha
             X_trval = np.vstack([X_train.values, X_val.values])
             y_trval = np.hstack([y_train.values, y_val.values])
             final_model = Ridge(alpha=best_alpha).fit(X_trval, y_trval)
 
             # 6) Evaluar en test
-            test_rmse = mean_squared_error(y_test, final_model.predict(X_test), squared=False)
+            test_rmse = np.sqrt(mean_squared_error(y_test, final_model.predict(X_test)))
 
-            # 7) Log de métricas finales y modelo
-            mlflow.log_metric("best_val_rmse",   best_val_rmse)
-            mlflow.log_metric("test_rmse",       test_rmse)
-            mlflow.log_param( "best_alpha",      best_alpha)
+            # 7) Log métricas y modelo final
+            mlflow.log_metric("best_val_rmse", best_val_rmse)
+            mlflow.log_metric("test_rmse",     test_rmse)
+            mlflow.log_param( "best_alpha",    best_alpha)
 
             mlflow.sklearn.log_model(
                 sk_model=final_model,
@@ -445,7 +447,7 @@ with DAG(
                 registered_model_name="RealtorPriceModel"
             )
 
-        # 8) Comparar test_rmse con el mejor run previo (excluyendo este)
+        # 8) Comparar test_rmse con el mejor run previo (excluyendo éste)
         exp = mlflow.get_experiment_by_name("Realtor_Price")
         best = mlflow.search_runs(
             [exp.experiment_id],
@@ -454,12 +456,12 @@ with DAG(
             max_results=1,
         )
         prev_best = best["metrics.test_rmse"].iloc[0] if not best.empty else None
-        promoted = (prev_best is None) or (test_rmse < prev_best)
+        promoted  = (prev_best is None) or (test_rmse < prev_best)
 
-        # 9) Reabrir el run actual y añadir tags de orquestación y decisión
+        # 9) Reabrir el run actual y añadir tags
         mlflow.start_run(run_id=current_run_id)
-        mlflow.set_tag("dag_run_id",      dag_run.run_id)
-        mlflow.set_tag("execution_date",  context["execution_date"].isoformat())
+        mlflow.set_tag("dag_run_id",         dag_run.run_id)
+        mlflow.set_tag("execution_date",     context["execution_date"].isoformat())
         mlflow.set_tag("previous_best_rmse", str(prev_best))
         mlflow.set_tag("current_rmse",       str(test_rmse))
         mlflow.set_tag("promoted",           "true" if promoted else "false")
@@ -469,6 +471,7 @@ with DAG(
             f"train_and_register → run_id={current_run_id}  "
             f"best_alpha={best_alpha}  test_rmse={test_rmse:.2f}  promoted={promoted}"
         )
+
 
     train_task = PythonOperator(
         task_id="train_and_register",
