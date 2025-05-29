@@ -385,6 +385,7 @@ with DAG(
         python_callable=preprocess_data,
     )
 
+
     def train_and_register(**context):
         dag_run = context["dag_run"]
 
@@ -408,32 +409,34 @@ with DAG(
         mlflow.set_tracking_uri(os.getenv("AIRFLOW_VAR_MLFLOW_TRACKING_URI"))
         mlflow.set_experiment("Realtor_Price_Experiment")
 
-        # 3) Búsqueda de mejor alpha para Ridge
+        # 3) Hiperparámetros a probar
         alphas = [0.01, 0.1, 1.0, 10.0, 100.0]
         best_alpha    = None
         best_val_rmse = np.inf
 
-        # 4) Primer run: prueba de alphas sobre (train, val)
+        # 4) Primer run: prueba de alphas
         with mlflow.start_run(run_name=f"train__{dag_run.run_id}") as run:
             current_run_id = run.info.run_id
 
             for α in alphas:
                 m      = Ridge(alpha=α).fit(X_train, y_train)
-                rmse_v = mean_squared_error(y_val, m.predict(X_val), squared=False)
+                # --- aquí el cambio: numpy.sqrt( MSE ) en lugar de squared=False ---
+                rmse_v = np.sqrt(mean_squared_error(y_val, m.predict(X_val)))
                 mlflow.log_metric(f"val_rmse_alpha_{α}", rmse_v)
+
                 if rmse_v < best_val_rmse:
                     best_val_rmse = rmse_v
                     best_alpha    = α
 
-            # 5) Reentrenar sobre train+val con el alpha óptimo
+            # 5) Reentrenar en train+val
             X_trval = np.vstack([X_train.values, X_val.values])
             y_trval = np.hstack([y_train.values, y_val.values])
             final_model = Ridge(alpha=best_alpha).fit(X_trval, y_trval)
 
-            # 6) Evaluar sobre test
-            test_rmse = mean_squared_error(y_test, final_model.predict(X_test), squared=False)
+            # 6) Evaluar en test
+            test_rmse = np.sqrt(mean_squared_error(y_test, final_model.predict(X_test)))
 
-            # 7) Log de métricas y del modelo
+            # 7) Log de métricas y modelo
             mlflow.log_metric("best_val_rmse", best_val_rmse)
             mlflow.log_metric("test_rmse",     test_rmse)
             mlflow.log_param( "best_alpha",    best_alpha)
@@ -443,24 +446,20 @@ with DAG(
                 registered_model_name = "RealtorPriceModel"
             )
 
-        # 8) Conectar con el Registry y recuperar el mejor run previo
+        # 8) Buscar el mejor run ANTERIOR con MlflowClient
         client = MlflowClient(tracking_uri=os.getenv("AIRFLOW_VAR_MLFLOW_TRACKING_URI"))
         exp    = client.get_experiment_by_name("Realtor_Price_Experiment")
-        # buscamos runs excluyendo el actual y ordenamos ascendente por test_rmse
-        prior_runs = client.search_runs(
+        prior = client.search_runs(
             experiment_ids=[exp.experiment_id],
             filter_string = f"attributes.run_id != '{current_run_id}'",
             order_by       = ["metrics.test_rmse ASC"],
             max_results    = 1,
         )
-        if not prior_runs:
-            prev_best_rmse = None
-        else:
-            prev_best_rmse = prior_runs[0].data.metrics.get("test_rmse")
+        prev_best_rmse = prior[0].data.metrics["test_rmse"] if prior else None
 
         promoted = (prev_best_rmse is None) or (test_rmse < prev_best_rmse)
 
-        # 9) Reabrir el run actual para etiquetar toda la orquestación
+        # 9) Reabrir el run actual para taggear y, si toca, promover en el Registry
         with mlflow.start_run(run_id=current_run_id):
             mlflow.set_tag("dag_run_id",         dag_run.run_id)
             mlflow.set_tag("execution_date",     context["execution_date"].isoformat())
@@ -468,9 +467,8 @@ with DAG(
             mlflow.set_tag("current_rmse",       str(test_rmse))
             mlflow.set_tag("promoted",           str(promoted).lower())
 
-            # 10) Si toca promover, lo hacemos en el Registry
+            # 10) Promover la versión del modelo si corresponde
             if promoted:
-                # recuperar la versión recién creada para este run
                 versions = client.get_latest_versions("RealtorPriceModel")
                 my_version = next(
                     (v.version for v in versions if v.run_id == current_run_id),
@@ -480,9 +478,9 @@ with DAG(
                     raise RuntimeError(f"No encontré la versión para run {current_run_id}")
 
                 client.transition_model_version_stage(
-                    name                   = "RealtorPriceModel",
-                    version                = my_version,
-                    stage                  = "Production",
+                    name                     = "RealtorPriceModel",
+                    version                  = my_version,
+                    stage                    = "Production",
                     archive_existing_versions = True,
                 )
                 logging.info(f"train_and_register → promovida versión {my_version} a Production")
@@ -491,7 +489,6 @@ with DAG(
             f"train_and_register → run_id={current_run_id}  "
             f"best_alpha={best_alpha}  test_rmse={test_rmse:.2f}  promoted={promoted}"
         )
-
 
     train_task = PythonOperator(
         task_id="train_and_register",
