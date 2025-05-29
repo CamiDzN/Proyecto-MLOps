@@ -10,6 +10,7 @@ from sklearn.metrics import mean_squared_error
 from sklearn.model_selection import GridSearchCV
 import mlflow
 import mlflow.sklearn
+from mlflow.tracking import MlflowClient
 import logging
 
 from airflow import DAG
@@ -466,6 +467,40 @@ with DAG(
         mlflow.set_tag("current_rmse",       str(test_rmse))
         mlflow.set_tag("promoted",           "true" if promoted else "false")
         mlflow.end_run()
+
+
+        # 10) Si toca promover, hacerlo en el Model Registry
+        if promoted:
+            from mlflow.tracking import MlflowClient
+
+            client = MlflowClient(
+                tracking_uri=os.getenv("AIRFLOW_VAR_MLFLOW_TRACKING_URI")
+            )
+
+            # Recuperar todas las versiones del modelo y encontrar la generada en este run
+            versions = client.get_latest_versions("RealtorPriceModel", stages=["None", "Staging", "Production"])
+            model_version = None
+            for mv in versions:
+                if mv.run_id == current_run_id:
+                    model_version = mv.version
+                    break
+
+            if model_version is None:
+                raise RuntimeError(f"No pude encontrar la versión registrada para run_id={current_run_id}")
+
+            # Transicionar al stage Production y archivar las anteriores
+            client.transition_model_version_stage(
+                name="RealtorPriceModel",
+                version=model_version,
+                stage="Production",
+                archive_existing_versions=True
+            )
+
+            logging.info(
+                f"train_and_register → Model version {model_version} "
+                f"has been promoted to Production"
+            )
+
 
         logging.info(
             f"train_and_register → run_id={current_run_id}  "
