@@ -177,7 +177,7 @@ with DAG(
         """
         # 0) Configurar MLflow
         mlflow.set_tracking_uri(os.getenv("AIRFLOW_VAR_MLFLOW_TRACKING_URI"))
-        mlflow.set_experiment("Realtor_Price")
+        mlflow.set_experiment("Realtor_Price_Experiment")
 
         ti = context["ti"]
         dag_run = context["dag_run"]
@@ -408,7 +408,7 @@ with DAG(
 
         # 2) Configurar MLflow
         mlflow.set_tracking_uri(os.getenv("AIRFLOW_VAR_MLFLOW_TRACKING_URI"))
-        mlflow.set_experiment("Realtor_Price")
+        mlflow.set_experiment("Realtor_Price_Experiment")
 
         # 3) Lista de alphas a probar
         alphas = [0.01, 0.1, 1.0, 10.0, 100.0]
@@ -449,7 +449,7 @@ with DAG(
             )
 
         # 8) Comparar test_rmse con el mejor run previo (excluyendo éste)
-        exp = mlflow.get_experiment_by_name("Realtor_Price")
+        exp = mlflow.get_experiment_by_name("Realtor_Price_Experiment")
         best = mlflow.search_runs(
             [exp.experiment_id],
             filter_string=f"attributes.run_id != '{current_run_id}'",
