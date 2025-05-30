@@ -1,0 +1,11 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: mysql-init-scripts
+data:
+  create-databases.sql: |
+    CREATE DATABASE IF NOT EXISTS CleanData;
+    CREATE DATABASE IF NOT EXISTS RawData;
+    GRANT ALL PRIVILEGES ON CleanData.* TO 'model_user'@'%';
+    GRANT ALL PRIVILEGES ON RawData.*     TO 'model_user'@'%';
+    FLUSH PRIVILEGES;

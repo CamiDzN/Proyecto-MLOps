@@ -1,0 +1,12 @@
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: mysql-pvc
+spec:
+  accessModes:
+    - ReadWriteOnce
+  resources:
+    requests:
+      storage: 5Gi
+  # Dependiendo de tu configuración en microk8s puede que ya tengas un StorageClass por defecto.
+  storageClassName: microk8s-hostpath

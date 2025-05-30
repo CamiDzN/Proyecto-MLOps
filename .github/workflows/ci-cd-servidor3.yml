@@ -2,7 +2,7 @@ name: CI/CD Servidor3
 
 on:
   push:
-    branches: [ LuisCa ]
+    branches: [ main ]
     paths:
       - 'Servidor3/grafana/**'
       - 'Servidor3/prometheus/**'
@@ -15,6 +15,7 @@ permissions:
 
 jobs:
   build-and-deploy:
+    if: github.actor != 'github-actions[bot]'
     runs-on: ubuntu-latest
     steps:
 
@@ -59,10 +60,15 @@ jobs:
           git config user.name "GitHub Actions"
           git config user.email "actions@github.com"
           cd Servidor3/k8s
+          # 1) Integrar cualquier commit que ya esté en remoto
+          git pull --rebase --autostash origin main
+
+          # 2) Detectar cambios, commitear y pushear
+          
           if git diff --quiet kustomization.yaml; then
             echo "No hay cambios en kustomization.yaml"
           else
             git add kustomization.yaml
             git commit -m "chore: actualizar imágenes a tag ${{ env.IMAGE_TAG }}"
-            git push origin LuisCa
+            git push origin main
           fi
