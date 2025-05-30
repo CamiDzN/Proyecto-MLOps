@@ -12,6 +12,8 @@ resources:
 - prometheus-service.yaml
 - streamlit-deployment.yaml
 - streamlit-service.yaml
+- api-deployment.yaml
+- api-service.yaml
 
 images:
 - name: camidzn/fastapi
@@ -22,5 +24,3 @@ images:
   newTag: 20250528-7
 - name: camidzn/streamlit-app
   newTag: 20250528-7
-- name: luiscacyber/fastapi
-  newTag: 20250526-dc72292
