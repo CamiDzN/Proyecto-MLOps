@@ -18,12 +18,12 @@ DB_URL = os.getenv("DB_URL", "postgresql://user:pass@db:5432/raw_data")
 app = FastAPI()
 
 # Conexión a MLflow: busca siempre el último modelo en stage=Production
-client = MlflowClient(tracking_uri=MLFLOW_TRACKING_URI)
-prod = client.get_latest_versions(MODEL_NAME, stages=["Production"])
-if not prod:
-    raise RuntimeError(f"No hay modelo en Production para {MODEL_NAME}")
-model_version = prod[0].version
-model = mlflow.pyfunc.load_model(f"models:/{MODEL_NAME}/Production")
+#client = MlflowClient(tracking_uri=MLFLOW_TRACKING_URI)
+#prod = client.get_latest_versions(MODEL_NAME, stages=["Production"])
+#if not prod:
+#    raise RuntimeError(f"No hay modelo en Production para {MODEL_NAME}")
+#model_version = prod[0].version
+#model = mlflow.pyfunc.load_model(f"models:/{MODEL_NAME}/Production")
 
 # Conexión a la BD de RAW DATA
 engine = create_engine(DB_URL)
@@ -40,7 +40,7 @@ def predict(req: PredictRequest):
     REQUEST_COUNT.labels(model=MODEL_NAME).inc()
     with REQUEST_LATENCY.labels(model=MODEL_NAME).time():
         df = pd.DataFrame([req.data])
-        pred = float(model.predict(df)[0])
+#        pred = float(model.predict(df)[0])
         # Guardar en RAW DATA
         with engine.begin() as conn:
             conn.execute(

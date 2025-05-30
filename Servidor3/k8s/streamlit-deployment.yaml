@@ -14,7 +14,7 @@ spec:
     spec:
       containers:
       - name: streamlit
-        image: luiscacyber/grafana:initial
+        image: camidzn/streamlit-app:20250527-6
         ports:
         - containerPort: 8501
         env:

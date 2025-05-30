@@ -1,26 +1,19 @@
 apiVersion: apps/v1
 kind: Deployment
 metadata:
-  name: api
+  name: fastapi
 spec:
   replicas: 1
   selector:
     matchLabels:
-      app: api
+      app: fastapi
   template:
     metadata:
       labels:
-        app: api
+        app: fastapi
     spec:
       containers:
-        - name: api
-          image: luiscacyber/grafana:initial
+        - name: fastapi
+          image: camidzn/fastapi:initial
           ports:
             - containerPort: 8000
-          env:
-            - name: MODEL_NAME
-              value: "MiModelo"
-            - name: MLFLOW_TRACKING_URI
-              value: "http://mlflow-server:5000"
-            - name: DB_URL
-              value: "postgresql://user:pass@db:5432/raw_data"
