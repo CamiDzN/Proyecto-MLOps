@@ -17,3 +17,10 @@ spec:
           image: camidzn/fastapi:initial
           ports:
             - containerPort: 8000
+          env:
+            - name: MODEL_NAME
+              value: "MiModelo"
+            - name: MLFLOW_TRACKING_URI
+              value: "http://mlflow:5000"
+            - name: DB_URL
+              value: "postgresql://user:pass@postgres-mlflow:5432/raw_data"
