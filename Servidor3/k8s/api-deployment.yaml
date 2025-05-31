@@ -28,7 +28,7 @@ spec:
             # 2) Credenciales y endpoint de MinIO para que boto3/MLflow baje el artefacto
             # ──────────────────────────────────────────────────────────────
             - name: MLFLOW_S3_ENDPOINT_URL
-              value: "http://minio-service:9000"
+              value: "http://minio-service.mlops.svc.cluster.local:9000"
             - name: AWS_ACCESS_KEY_ID
               value: "admin"
             - name: AWS_SECRET_ACCESS_KEY
