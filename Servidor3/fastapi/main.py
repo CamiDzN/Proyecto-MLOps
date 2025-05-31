@@ -16,7 +16,7 @@ from starlette.responses import Response
 # -------------------------------------------------------
 
 # Leer variables de entorno
-MLFLOW_TRACKING_URI = os.getenv("MLFLOW_TRACKING_URI", "http://mlflow-service:5000")
+MLFLOW_TRACKING_URI = os.getenv("MLFLOW_TRACKING_URI", "http://10.43.101.196:30003")
 MLFLOW_MODEL_NAME   = os.getenv("MLFLOW_MODEL_NAME", "RealtorPriceModel")
 RAW_DATA_DB_URI     = os.getenv(
     "RAW_DATA_DB_URI",

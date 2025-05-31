@@ -9,6 +9,6 @@ spec:
   selector:
     app: fastapi
   ports:
-    - port: 80        # Puerto interno del Service
+    - port: 8000        # Puerto interno del Service
       targetPort: 8000  # Puerto en que corre FastAPI dentro del contenedor
       nodePort: 30100   # Puerto expuesto en cada nodo (entre 30000–32767)
