@@ -16,10 +16,10 @@ resources:
 
 images:
 - name: camidzn/fastapi
-  newTag: 20250531-24
+  newTag: 20250531-25
 - name: camidzn/grafana
-  newTag: 20250531-24
+  newTag: 20250531-25
 - name: camidzn/prometheus
-  newTag: 20250531-24
+  newTag: 20250531-25
 - name: camidzn/streamlit-app
-  newTag: 20250531-24
+  newTag: 20250531-25
