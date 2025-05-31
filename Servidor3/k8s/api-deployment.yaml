@@ -27,3 +27,11 @@ spec:
               value: "RealtorPriceModel"
             - name: RAW_DATA_DB_URI
               value: "mysql+pymysql://model_user:model_password@10.43.101.172:30306/RawData"
+            # 2) Credenciales AWS para MinIO
+            - name: AWS_ACCESS_KEY_ID
+              value: "admin"
+            - name: AWS_SECRET_ACCESS_KEY
+              value: "supersecret"
+            # 3) Endpoint personalizado para S3 (tu MinIO)
+            - name: MLFLOW_S3_ENDPOINT_URL
+              value: "http://10.43.101.196:30001"
