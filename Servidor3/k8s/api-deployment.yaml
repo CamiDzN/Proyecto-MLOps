@@ -24,14 +24,4 @@ spec:
               value: "http://10.43.101.196:30003"
             - name: DB_URL
               value: "postgresql://user:pass@db:5432/raw_data"
-            # ──────────────────────────────────────────────────────────────
-            # 2) Credenciales y endpoint de MinIO para que boto3/MLflow baje el artefacto
-            # ──────────────────────────────────────────────────────────────
-            - name: MLFLOW_S3_ENDPOINT_URL
-              value: "http://minio-service.mlops.svc.cluster.local:9000"
-            - name: AWS_ACCESS_KEY_ID
-              value: "admin"
-            - name: AWS_SECRET_ACCESS_KEY
-              value: "supersecret"
-            - name: AWS_DEFAULT_REGION
-              value: "us-east-1"
+
