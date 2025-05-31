@@ -2,6 +2,7 @@ apiVersion: v1
 kind: ConfigMap
 metadata:
   name: grafana-provisioning
+  namespace: mlops
 data:
   datasources.yml: |
     apiVersion: 1
