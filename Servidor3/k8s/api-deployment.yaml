@@ -16,10 +16,28 @@ spec:
     spec:
       containers:
         - name: fastapi
-          image: camidzn/fastapi:initial
-          imagePullPolicy: IfNotPresent
+          image: camidzn/fastapi:20250531-22
+          # Usamos la imagen que ya existe localmente en microk8s/containerd
+          imagePullPolicy: Never
+
+          # Indicamos explícitamente el directorio de trabajo.
+          workingDir: /app
+
+          # Comando de arranque:
+          #   1) Listar todo /app para que se vean en logs (debug).
+          #   2) Luego arrancar uvicorn apuntando a main:app.
+          command:
+            - sh
+            - -c
+            - |
+              echo "====== Contenido de /app al arranque ======"
+              ls -R /app || true
+              echo "====== Fin contenido de /app ======"
+              uvicorn main:app --host 0.0.0.0 --port 8000
+
           ports:
             - containerPort: 8000
+
           env:
             - name: MLFLOW_TRACKING_URI
               value: "http://mlflow-service:5000"
@@ -27,20 +45,23 @@ spec:
               value: "RealtorPriceModel"
             - name: RAW_DATA_DB_URI
               value: "mysql+pymysql://model_user:model_password@10.43.101.172:30306/RawData"
+
           readinessProbe:
             httpGet:
               path: /health
               port: 8000
-            initialDelaySeconds: 5
+            initialDelaySeconds: 15
             periodSeconds: 10
-            failureThreshold: 3
+            failureThreshold: 5
+
           livenessProbe:
             httpGet:
               path: /health
               port: 8000
-            initialDelaySeconds: 15
+            initialDelaySeconds: 30
             periodSeconds: 20
             failureThreshold: 5
+
           resources:
             requests:
               memory: "256Mi"
