@@ -16,38 +16,35 @@ spec:
     spec:
       containers:
         - name: fastapi
-          # Esta es la imagen que Kustomize reemplazará de "initial" a "20250531-18"
           image: camidzn/fastapi:initial
+          imagePullPolicy: IfNotPresent
           ports:
             - containerPort: 8000
           env:
-            # Nombre del modelo en MLflow Registry
-            - name: MODEL_NAME
-              value: "RealtorPriceModel"
-
-            # URI del MLflow Tracking Server DENTRO del clúster
-            #  - El service se llama 'mlflow-service' en namespace 'mlops'
-            #  - Internamente, las aplicaciones lo resuelven como:
-            #      http://mlflow-service.mlops.svc.cluster.local:5000
             - name: MLFLOW_TRACKING_URI
-              value: "http://mlflow-service.mlops.svc.cluster.local:5000"
-
-            # Cadena de conexión PostgreSQL para raw_data
-            #  - El service se llama 'postgres-service' en namespace 'mlops'
-            #  - Credenciales según tu postgres-deployment.yaml: user=postgres, password=supersecret, db=mlflow
-            - name: DB_URL
-              value: "postgresql://postgres:supersecret@postgres-service.mlops.svc.cluster.local:5432/mlflow"
-
-          # Probes para que Kubernetes verifique salud del contenedor
-          livenessProbe:
-            httpGet:
-              path: /
-              port: 8000
-            initialDelaySeconds: 10
-            periodSeconds: 20
+              value: "http://mlflow-service:5000"
+            - name: MLFLOW_MODEL_NAME
+              value: "RealtorPriceModel"
+            - name: RAW_DATA_DB_URI
+              value: "mysql+pymysql://model_user:model_password@10.43.101.172:30306/RawData"
           readinessProbe:
             httpGet:
-              path: /
+              path: /health
               port: 8000
             initialDelaySeconds: 5
             periodSeconds: 10
+            failureThreshold: 3
+          livenessProbe:
+            httpGet:
+              path: /health
+              port: 8000
+            initialDelaySeconds: 15
+            periodSeconds: 20
+            failureThreshold: 5
+          resources:
+            requests:
+              memory: "256Mi"
+              cpu: "250m"
+            limits:
+              memory: "512Mi"
+              cpu: "500m"
