@@ -2,6 +2,7 @@ apiVersion: apps/v1
 kind: Deployment
 metadata:
   name: fastapi
+  namespace: mlops
 spec:
   replicas: 1
   selector:
@@ -23,5 +24,7 @@ spec:
             - name: MLFLOW_TRACKING_URI
               value: "http://10.43.101.196:30003"
             - name: DB_URL
-              value: "postgresql://user:pass@db:5432/raw_data"
+              #value: "postgresql://user:pass@db:5432/raw_data"
+              value: "postgresql://postgres:supersecret@postgres-service:5432/mlflow"
+
 
