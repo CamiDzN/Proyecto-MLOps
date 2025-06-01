@@ -18,23 +18,37 @@ spec:
         ports:
         - containerPort: 3000
 
-      env:
-        - name: GF_AUTH_ANONYMOUS_ENABLED
-          value: "true"
-        - name: GF_AUTH_ANONYMOUS_ORG_ROLE
-          value: "Viewer"
+        # ——————————————————————————
+        # VARIABLES DE ENTORNO (dentro del contenedor)
+        env:
+          - name: GF_AUTH_ANONYMOUS_ENABLED
+            value: "true"
+          - name: GF_AUTH_ANONYMOUS_ORG_ROLE
+            value: "Viewer"
+          # (Opcional: para desactivar por completo el formulario de login,
+          #   podrías añadir:
+          # - name: GF_AUTH_DISABLE_LOGIN_FORM
+          #   value: "true"
+          # )
 
-      volumeMounts:
-      - name: provisioning
-        mountPath: /etc/grafana/provisioning
-      - name: grafana-dashboards
-        mountPath: /var/lib/grafana/dashboards
+        # ——————————————————————————
+        # VOLUMENES A MONTAR (dentro del contenedor)
+        volumeMounts:
+          # 1) Montaje del ConfigMap con datasources.yml + dashboards.yml
+          - name: provisioning
+            mountPath: /etc/grafana/provisioning
 
+          # 2) Montaje del ConfigMap con los JSON de dashboards
+          - name: grafana-dashboards
+            mountPath: /var/lib/grafana/dashboards
+
+      # ——————————————————————————
+      # DEFINICIÓN DE VOLUMES (a nivel de spec.template.spec, no dentro de 'containers')
       volumes:
-      - name: provisioning
-        configMap:
-          name: grafana-provisioning
+        - name: provisioning
+          configMap:
+            name: grafana-provisioning
 
-      - name: grafana-dashboards
-        configMap:
-          name: grafana-dashboards
+        - name: grafana-dashboards
+          configMap:
+            name: grafana-dashboards
