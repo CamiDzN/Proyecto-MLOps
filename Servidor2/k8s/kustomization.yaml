@@ -12,5 +12,4 @@ resources:
 - mlflow-service.yaml
 images:
 - name: camidzn/mlflow-custom
-  newTag: 20250601-6
-
+  newTag: 20250601-7
