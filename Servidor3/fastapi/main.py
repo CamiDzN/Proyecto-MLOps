@@ -32,6 +32,7 @@ if S3_ENDPOINT:
 
 engine = create_engine(RAW_URI)
 app = FastAPI()
+logging.basicConfig(level=logging.INFO)
 
 class RawFeatures(BaseModel):
     brokered_by: float
@@ -47,7 +48,7 @@ class RawFeatures(BaseModel):
     house_size: float
     prev_sold_date: str
 
-def preprocess_input(data: dict, model) -> pd.DataFrame:
+def preprocess_and_align(data: dict, model) -> pd.DataFrame:
     df = pd.DataFrame([data])
     
     # 1) Rellenar numéricos
@@ -59,23 +60,33 @@ def preprocess_input(data: dict, model) -> pd.DataFrame:
     now = pd.Timestamp.utcnow().replace(tzinfo=None)
     df["days_since_last_sale"] = (now - df["prev_sold_date"]).dt.days.fillna(-1).astype(int)
 
-    # 3) One-hot de status
-    df["status_to_build"] = (df["status"] == "to_build").astype(int)
+    # 3) Generar columnas dummy posibles
+    df["status_to_build"] = 1 if data["status"] == "to_build" else 0
+    df["status_for_sale"] = 1 if data["status"] == "for_sale" else 0
 
     # 4) Eliminar columnas no utilizadas
-    drop_cols = ["brokered_by", "street", "zip_code", "city", "state", "prev_sold_date"]
+    drop_cols = ["brokered_by", "street", "zip_code", "city", "state", "prev_sold_date", "status"]
     df.drop(columns=drop_cols, inplace=True, errors="ignore")
 
-    # 5) Ajustar dinámicamente al modelo
-    if hasattr(model, "feature_names_in_"):
-        expected_cols = list(model.feature_names_in_)
-        df = df.reindex(columns=expected_cols, fill_value=0)
-    else:
-        raise ValueError("El modelo cargado no contiene 'feature_names_in_' para alinear las columnas.")
+    # 5) Probar combinaciones posibles
+    candidate_sets = [
+        ["bed", "bath", "acre_lot", "house_size", "days_since_last_sale", "status_to_build"],
+        ["bed", "bath", "acre_lot", "house_size", "days_since_last_sale", "status_for_sale"],
+        ["bed", "bath", "acre_lot", "house_size", "days_since_last_sale"],
+    ]
 
-    return df
+    for cols in candidate_sets:
+        try:
+            aligned = df.reindex(columns=cols, fill_value=0)
+            # Validación rápida de predict
+            model.predict(aligned)
+            logging.info(f"Usando columnas para predicción: {cols}")
+            return aligned
+        except Exception as e:
+            logging.warning(f"Falló intento con columnas {cols}: {str(e)}")
+            continue
 
-logging.basicConfig(level=logging.INFO)
+    raise ValueError("Ninguna combinación de columnas fue compatible con el modelo entrenado.")
 
 @app.get("/health")
 def health():
@@ -90,9 +101,7 @@ def predict(raw: RawFeatures):
 
     with LATENCIES.time():
         model = mlflow.sklearn.load_model(f"models:/{MODEL_NAME}/Production")
-        df_input = preprocess_input(data_dict, model)
-        logging.info(f"Input preprocesado para el modelo: {df_input.to_dict(orient='records')}")
-
+        df_input = preprocess_and_align(data_dict, model)
         prediction = model.predict(df_input)[0]
         logging.info(f"Predicción generada: {prediction}")
 
