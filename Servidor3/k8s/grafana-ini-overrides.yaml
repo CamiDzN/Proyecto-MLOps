@@ -4,11 +4,22 @@ metadata:
   name: grafana-ini-overrides
 data:
   grafana.ini: |
+    ########################################
+    # SECCIÓN 1: DESACTIVAR EL FORMULARIO DE LOGIN
+    [auth]
+    # Deshabilita el formulario de login tradicional
+    disable_login_form = true
+
+    # (Opcional) Desactivar el login básico (usuario/contraseña)
+    [auth.basic]
+    enabled = false
+
+    ########################################
+    # SECCIÓN 2: HABILITAR EL ACCESO ANÓNIMO
     [auth.anonymous]
     enabled = true
     org_role = Viewer
 
-    [security]
-    # (opcional) puedes definir usuario/password de admin si lo deseas, por ejemplo:
-    # admin_user = admin
-    # admin_password = admin
+    ########################################
+    # (El resto de las secciones de grafana.ini se completan con la configuración por defecto
+    #  que trae la imagen, salvo lo que acabamos de sobrescribir arriba)
