@@ -17,10 +17,24 @@ spec:
         image: camidzn/grafana:initial
         ports:
         - containerPort: 3000
-        volumeMounts:
-        - name: provisioning
-          mountPath: /etc/grafana/provisioning
+
+      env:
+        - name: GF_AUTH_ANONYMOUS_ENABLED
+          value: "true"
+        - name: GF_AUTH_ANONYMOUS_ORG_ROLE
+          value: "Viewer"
+
+      volumeMounts:
+      - name: provisioning
+        mountPath: /etc/grafana/provisioning
+      - name: grafana-dashboards
+        mountPath: /var/lib/grafana/dashboards
+
       volumes:
       - name: provisioning
         configMap:
           name: grafana-provisioning
+
+      - name: grafana-dashboards
+        configMap:
+          name: grafana-dashboards
