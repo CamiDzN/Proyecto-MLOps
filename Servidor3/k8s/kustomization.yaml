@@ -13,6 +13,7 @@ resources:
 - streamlit-service.yaml
 - api-deployment.yaml
 - api-service.yaml
+- grafana-dashboards-configmap.yaml
 
 images:
 - name: camidzn/fastapi
