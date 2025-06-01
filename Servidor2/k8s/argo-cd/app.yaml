@@ -7,8 +7,8 @@ spec:
   project: default
   source:
     repoURL: https://github.com/CamiDzN/Proyecto-MLOps
-    targetRevision: main
-    path: manifests/mlops
+    targetRevision: DanielR
+    path: Servidor2/k8s
   destination:
     server: https://kubernetes.default.svc
     namespace: mlops
