@@ -5,7 +5,7 @@ resources:
 - namespace.yaml
 - minio-deployment.yaml
 - minio-service.yaml
-- create-bucket-job.yaml
+- create-minio-bucket.yaml
 - postgres-deployment.yaml
 - postgres-service.yaml
 - mlflow-deployment.yaml
@@ -13,6 +13,4 @@ resources:
 images:
 - name: camidzn/mlflow-custom
   newTag: 20250601-6
-- name: danirc27/mlflow-custom
-  newName: camidzn/mlflow-custom
-  newTag: 20250601-5
+
