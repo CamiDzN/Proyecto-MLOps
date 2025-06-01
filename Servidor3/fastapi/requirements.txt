@@ -4,7 +4,6 @@ mlflow
 pandas
 numpy
 sqlalchemy
-psycopg2-binary
 prometheus-client
 boto3
 pymysql

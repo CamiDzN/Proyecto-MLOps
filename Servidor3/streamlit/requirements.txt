@@ -3,3 +3,5 @@ shap
 numpy
 pandas
 prometheus-client
+mlflow
+requests

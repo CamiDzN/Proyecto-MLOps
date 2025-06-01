@@ -14,12 +14,22 @@ spec:
     spec:
       containers:
       - name: streamlit
-        image: camidzn/streamlit-app:20250527-6
+        image: camidzn/streamlit-app:initial
         ports:
         - containerPort: 8501
         env:
         - name: PROMETHEUS_MULTIPROC_DIR
           value: /tmp/streamlit_metrics
+        - name: API_URL
+          value: "http://fastapi:8000/predict"
+        - name: MLFLOW_TRACKING_URI
+          value: "http://10.43.101.196:30003"
+        - name: AWS_ACCESS_KEY_ID
+          value: "admin"
+        - name: AWS_SECRET_ACCESS_KEY
+          value: "supersecret"
+        - name: MLFLOW_S3_ENDPOINT_URL
+          value: "http://10.43.101.196:30001"
         volumeMounts:
         - name: metrics
           mountPath: /tmp/streamlit_metrics
