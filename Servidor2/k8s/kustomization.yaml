@@ -11,6 +11,8 @@ resources:
 - mlflow-deployment.yaml
 - mlflow-service.yaml
 images:
+- name: camidzn/mlflow-custom
+  newTag: 20250601-6
 - name: danirc27/mlflow-custom
   newName: camidzn/mlflow-custom
   newTag: 20250601-5
