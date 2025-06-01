@@ -49,10 +49,10 @@ class RawFeatures(BaseModel):
 def preprocess_input(data: dict) -> pd.DataFrame:
     df = pd.DataFrame([data])
     num_cols = ["bed", "bath", "acre_lot", "house_size", "price"]
-    df[num_cols] = df[num_cols].fillna(method="ffill").fillna(0)
+    df[num_cols] = df[num_cols].ffill().fillna(0)
 
     df["prev_sold_date"] = pd.to_datetime(df["prev_sold_date"], errors="coerce")
-    now = pd.Timestamp.utcnow()
+    now = pd.Timestamp.utcnow().replace(tzinfo=None)
     df["days_since_last_sale"] = (now - df["prev_sold_date"]).dt.days.fillna(-1).astype(int)
 
     df["status_to_build"] = (df["status"] == "to_build").astype(int)
