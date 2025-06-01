@@ -11,7 +11,7 @@ data:
         static_configs:
           - targets: ['localhost:9090']
 
-      - job_name: 'streamlit'
+      - job_name: 'fastapi_inference'
         metrics_path: /metrics
         static_configs:
-          - targets: ['streamlit:8501']
+          - targets: ['fastapi:8000']
