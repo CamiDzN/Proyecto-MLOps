@@ -1,0 +1,18 @@
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: servidor1-mlops
+  namespace: argocd
+spec:
+  project: default
+  source:
+    repoURL: https://github.com/CamiDzN/Proyecto-MLOps.git
+    targetRevision: main
+    path: Servidor1/kubernetes
+  destination:
+    server: https://10.43.101.172:16443  # Dirección API del cluster Servidor1
+    namespace: mlops
+  syncPolicy:
+    automated:
+      selfHeal: true
+      prune: true
