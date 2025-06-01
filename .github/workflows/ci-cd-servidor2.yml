@@ -2,7 +2,7 @@ name: CI/CD Servidor2
 
 on:
   push:
-    branches: [ DanielR ]
+    branches: [ main ]
     paths:
       - 'Servidor2/mlflow/**'
       - 'Servidor2/k8s/**'
@@ -12,6 +12,7 @@ permissions:
 
 jobs:
   build-and-deploy:
+    if: github.actor != 'github-actions[bot]'
     runs-on: ubuntu-latest
     steps:
 
@@ -40,13 +41,22 @@ jobs:
       - name: Actualizar Kustomization
         run: |
           cd Servidor2/k8s
-          kustomize edit set image danirc27/mlflow-custom=${{ secrets.DOCKERHUB_USER }}/mlflow-custom:${{ env.IMAGE_TAG }}
+          kustomize edit set image ${{ secrets.DOCKERHUB_USER }}/mlflow-custom:${{ env.IMAGE_TAG }}
 
       - name: Commit de cambios de Kustomization
         run: |
           git config user.name "GitHub Actions"
           git config user.email "actions@github.com"
           cd Servidor2/k8s
-          git add kustomization.yaml
-          git commit -m "chore: actualizar imagen mlflow-custom ${{ env.IMAGE_TAG }}"
-          git push origin DanielR
+          # 1) Integrar cualquier commit que ya esté en remoto
+          git pull --rebase --autostash origin main
+
+          # 2) Detectar cambios, commitear y pushear
+          
+          if git diff --quiet kustomization.yaml; then
+            echo "No hay cambios en kustomization.yaml"
+          else
+            git add kustomization.yaml
+            git commit -m "chore: actualizar imagen mlflow-custom ${{ env.IMAGE_TAG }}"
+            git push origin main
+          fi

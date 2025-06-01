@@ -100,8 +100,13 @@ jobs:
           git config user.name "GitHub Actions"
           git config user.email "actions@github.com"
           git add Servidor1/.env
+          # 1) Integrar cualquier commit que ya esté en remoto
+          git pull --rebase --autostash origin main
+
+          # 2) Detectar cambios, commitear y pushear
           git commit -m "chore: actualizar Servidor1/.env con tag ${{ env.IMAGE_TAG }}" || echo "No hay cambios en Servidor1/.env"
           # Push a la misma rama que lanzó el workflow
           git push origin HEAD:${GITHUB_REF#refs/heads/}
+
 
 
