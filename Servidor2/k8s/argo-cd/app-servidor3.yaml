@@ -1,0 +1,18 @@
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: servidor3-mlops
+  namespace: argocd
+spec:
+  project: default
+  source:
+    repoURL: https://github.com/CamiDzN/Proyecto-MLOps.git
+    targetRevision: main
+    path: Servidor3/k8s
+  destination:
+    server: https://10.43.101.173:16443
+    namespace: default
+  syncPolicy:
+    automated:
+      selfHeal: true
+      prune: true

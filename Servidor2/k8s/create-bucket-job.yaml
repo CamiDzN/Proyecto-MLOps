@@ -1,0 +1,18 @@
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: create-minio-bucket
+  namespace: mlops
+spec:
+  template:
+    spec:
+      containers:
+        - name: create-bucket
+          image: minio/mc
+          command: ["/bin/sh", "-c"]
+          args:
+            - |
+              mc alias set myminio http://minio-service.mlops.svc.cluster.local:9000 admin supersecret && \
+              mc mb myminio/mlflows3 || echo "Bucket already exists"
+      restartPolicy: OnFailure
+
