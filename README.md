@@ -4,8 +4,8 @@ Este proyecto implementa una solución completa de MLOps distribuida en tres ser
 
 La arquitectura del proyecto está basada en contenedores Docker orquestados con Kubernetes (MicroK8s) y está organizada en tres entornos funcionales independientes, desplegados en máquinas virtuales diferentes:
 
-- **[Servidor 1](Servidor1/README.md)**: 
-#### 📂 Estructura Detallada de Carpeta - Servidor1
+ 
+#### 📂 Estructura Detallada de Carpeta - **[Servidor 1](Servidor1/README.md)**
 ```
 ├── .env
 ├── README.md
@@ -24,9 +24,10 @@ La arquitectura del proyecto está basada en contenedores Docker orquestados con
 ```
 
 Dedicado a la ingesta, preprocesamiento y preparación de datos. Incluye la configuración de Apache Airflow en la carpeta `airflow/` con su `Dockerfile` y `requirements.txt`, y el DAG principal `realtor_price_model.py` en `dags/` para la orquestación del flujo de datos. La base de datos MySQL se gestiona con manifiestos de Kubernetes en `kubernetes/` (despliegue, configmap de inicialización, PVC y servicio). También contiene `docker-compose.yaml` para el entorno de desarrollo y `kubeconfig-servidor1.yaml` para la conexión al clúster.
-- **[Servidor 2](Servidor2/README.md)**: 
+ 
 
-#### 📂 Estructura Detallada de Carpeta - Servidor2
+#### 📂 Estructura Detallada de Carpeta - **[Servidor 2](Servidor2/README.md)**:
+
 ```
 ├── README.md
 ├── k8s\
@@ -52,9 +53,8 @@ Dedicado a la ingesta, preprocesamiento y preparación de datos. Incluye la conf
 
 
 Centraliza el registro de experimentos y la gestión de artefactos. La carpeta `k8s/` contiene todos los manifiestos de Kubernetes para desplegar MLflow, MinIO y PostgreSQL, incluyendo `minio-deployment.yaml`, `mlflow-deployment.yaml`, `postgres-deployment.yaml` y sus respectivos servicios. Dentro de `k8s/argo-cd/` se encuentran las definiciones de aplicaciones de ArgoCD (`app.yaml`, `app-servidor1.yaml`, `app-servidor3.yaml`) para la automatización de despliegues en los tres servidores. La carpeta `mlflow/` contiene el `Dockerfile` para la imagen de MLflow. También incluye `kubeconfig-servidor1.yaml` y `kubeconfig-servidor3.yaml` para la conexión a los clústeres remotos.
-- **[Servidor 3](Servidor3/README.md)**: 
 
-#### 📂 Estructura Detallada de Carpeta - Servidor3
+#### 📂 Estructura Detallada de Carpeta - **[Servidor 3](Servidor3/README.md)**:
 ```
 ├── README.md
 ├── fastapi\
