@@ -4,6 +4,8 @@ kind: Kustomization
 
 resources:
 - grafana-configmap.yaml
+- grafana-dashboards-configmap.yaml
+- grafana-ini-overrides.yaml
 - grafana-deployment.yaml
 - grafana-service.yaml
 - prometheus-configmap.yaml
@@ -13,7 +15,6 @@ resources:
 - streamlit-service.yaml
 - api-deployment.yaml
 - api-service.yaml
-- grafana-dashboards-configmap.yaml
 
 images:
 - name: camidzn/fastapi
