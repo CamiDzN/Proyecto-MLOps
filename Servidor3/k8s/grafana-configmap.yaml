@@ -3,7 +3,7 @@ kind: ConfigMap
 metadata:
   name: grafana-provisioning
 data:
-  datasources.yml: |
+  provisioning-datasources.yaml: |
     apiVersion: 1
     datasources:
       - name: Prometheus
@@ -11,7 +11,8 @@ data:
         access: proxy
         url: http://prometheus:9090
         isDefault: true
-  dashboards.yml: |
+
+  provisioning-dashboards.yaml: |
     apiVersion: 1
     providers:
       - name: 'default'

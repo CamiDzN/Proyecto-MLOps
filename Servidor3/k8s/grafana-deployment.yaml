@@ -25,31 +25,39 @@ spec:
             value: "Viewer"
 
         volumeMounts:
-          # Monta el grafana.ini personalizado
+          # 1) Overwrite de grafana.ini para forzar [auth.anonymous] = true
           - name: grafana-ini-overrides
             mountPath: /etc/grafana/grafana.ini
             subPath: grafana.ini
 
-          # Monta los archivos de provisioning (datasources.yml, dashboards.yml)
+          # 2) Montar PROVISIONING de datasources en la ruta exacta:
           - name: provisioning
-            mountPath: /etc/grafana/provisioning
+            mountPath: /etc/grafana/provisioning/datasources/datasources.yml
+            subPath: provisioning-datasources.yaml
 
-          # Monta los JSON de dashboards
+          # 3) Montar PROVISIONING de dashboards (providers) en la ruta exacta:
+          - name: provisioning
+            mountPath: /etc/grafana/provisioning/dashboards/dashboards.yml
+            subPath: provisioning-dashboards.yaml
+
+          # 4) Montar los JSON de dashboards en /var/lib/grafana/dashboards
           - name: grafana-dashboards
             mountPath: /var/lib/grafana/dashboards
 
       volumes:
-        # Volume para el grafana.ini personalizado
+        # A) ConfigMap que contiene el override de grafana.ini
         - name: grafana-ini-overrides
           configMap:
             name: grafana-ini-overrides
 
-        # Volume para provisioning (datasources y dashboards YAML)
+        # B) ConfigMap que contiene:
+        #    • provisioning-datasources.yaml
+        #    • provisioning-dashboards.yaml
         - name: provisioning
           configMap:
             name: grafana-provisioning
 
-        # Volume para dashboards JSON
+        # C) ConfigMap que contiene los JSON de dashboards (inference_dashboard.json)
         - name: grafana-dashboards
           configMap:
             name: grafana-dashboards
