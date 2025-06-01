@@ -4,15 +4,8 @@ Este proyecto implementa una solución completa de MLOps distribuida en tres ser
 
 La arquitectura del proyecto está basada en contenedores Docker orquestados con Kubernetes (MicroK8s) y está organizada en tres entornos funcionales independientes, desplegados en máquinas virtuales diferentes:
 
-- **Servidor 1**: Contiene la configuración de Apache Airflow para el preprocesamiento automático de datos. El archivo clave es `Servidor1/dags/realtor_price_model.py`, que define el DAG encargado de la extracción, preprocesamiento y división de datos, así como el entrenamiento y registro de modelos de Machine Learning.
-- **Servidor 2**: Responsable del registro de experimentos y gestión de artefactos con MLflow y MinIO. La carpeta `Servidor2/k8s/argo-cd/` es fundamental, ya que contiene los manifiestos de ArgoCD para el despliegue automatizado de los servicios en los diferentes servidores (Servidor1, Servidor2 y Servidor3).
-- **Servidor 3**: Despliega el modelo en producción mediante una API con FastAPI, integra monitoreo con Prometheus & Grafana y una interfaz de usuario con Streamlit. La carpeta `Servidor3/k8s/` contiene todos los manifiestos de Kubernetes para orquestar estos servicios, con `kustomization.yaml` gestionando las etiquetas de las imágenes Docker y los recursos.
-
-Este enfoque modular permite escalar y mantener cada componente de forma independiente, emulando un entorno real de producción distribuido.
-
-## 📂 Estructura Detallada de Carpetas
-
-### Servidor1
+- **[Servidor 1](Servidor1/README.md)**: 
+#### 📂 Estructura Detallada de Carpeta - Servidor1
 ```
 ├── .env
 ├── README.md
@@ -30,7 +23,10 @@ Este enfoque modular permite escalar y mantener cada componente de forma indepen
     └── mysql-service.yaml
 ```
 
-### Servidor2
+Dedicado a la ingesta, preprocesamiento y preparación de datos. Incluye la configuración de Apache Airflow en la carpeta `airflow/` con su `Dockerfile` y `requirements.txt`, y el DAG principal `realtor_price_model.py` en `dags/` para la orquestación del flujo de datos. La base de datos MySQL se gestiona con manifiestos de Kubernetes en `kubernetes/` (despliegue, configmap de inicialización, PVC y servicio). También contiene `docker-compose.yaml` para el entorno de desarrollo y `kubeconfig-servidor1.yaml` para la conexión al clúster.
+- **[Servidor 2](Servidor2/README.md)**: 
+
+#### 📂 Estructura Detallada de Carpeta - Servidor2
 ```
 ├── README.md
 ├── k8s\
@@ -54,7 +50,11 @@ Este enfoque modular permite escalar y mantener cada componente de forma indepen
     └── Dockerfile
 ```
 
-### Servidor3
+
+Centraliza el registro de experimentos y la gestión de artefactos. La carpeta `k8s/` contiene todos los manifiestos de Kubernetes para desplegar MLflow, MinIO y PostgreSQL, incluyendo `minio-deployment.yaml`, `mlflow-deployment.yaml`, `postgres-deployment.yaml` y sus respectivos servicios. Dentro de `k8s/argo-cd/` se encuentran las definiciones de aplicaciones de ArgoCD (`app.yaml`, `app-servidor1.yaml`, `app-servidor3.yaml`) para la automatización de despliegues en los tres servidores. La carpeta `mlflow/` contiene el `Dockerfile` para la imagen de MLflow. También incluye `kubeconfig-servidor1.yaml` y `kubeconfig-servidor3.yaml` para la conexión a los clústeres remotos.
+- **[Servidor 3](Servidor3/README.md)**: 
+
+#### 📂 Estructura Detallada de Carpeta - Servidor3
 ```
 ├── README.md
 ├── fastapi\
@@ -89,3 +89,10 @@ Este enfoque modular permite escalar y mantener cada componente de forma indepen
     ├── app.py
     └── requirements.txt
 ```
+
+Encargado del despliegue y monitoreo del modelo en producción. Aloja una API con FastAPI (`fastapi/`), una interfaz de usuario con Streamlit (`streamlit/`), monitoreo con Prometheus (`prometheus/`) y visualización con Grafana (`grafana/`). Cada una de estas carpetas contiene su `Dockerfile` y archivos de configuración (`main.py` para FastAPI, `app.py` para Streamlit, `prometheus.yml` para Prometheus, y `provisioning/` para Grafana). La carpeta `k8s/` es crucial, ya que contiene todos los manifiestos de Kubernetes (`api-deployment.yaml`, `grafana-deployment.yaml`, `prometheus-deployment.yaml`, `streamlit-deployment.yaml` y sus servicios y configmaps asociados), con `kustomization.yaml` para la gestión de recursos y etiquetas de imágenes Docker. También incluye `kubeconfig-servidor3.yaml` para la conexión al clúster.
+
+Este enfoque modular permite escalar y mantener cada componente de forma independiente, emulando un entorno real de producción distribuido.
+
+
+
