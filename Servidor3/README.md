@@ -6,8 +6,18 @@ Este README describe en detalle cómo están organizados y desplegados los servi
 
 El **Servidor 3** es una pieza clave en la arquitectura MLOps, encargado de la fase de **despliegue y monitoreo** del modelo de Machine Learning. Este servidor aloja los siguientes componentes:
 
-- **FastAPI**: Una API que expone el modelo de inferencia para su consumo.
-- **Streamlit**: Una interfaz de usuario interactiva para visualizar los resultados del modelo y interactuar con él.
+- **FastAPI**: Una API RESTful que expone el modelo de inferencia de precios de propiedades. Se encarga de:
+  - Recibir datos crudos de entrada.
+  - Preprocesar los datos para alinearlos con el formato esperado por el modelo.
+  - Cargar el modelo de Machine Learning desde MLflow (en etapa de Producción).
+  - Realizar predicciones.
+  - Almacenar los datos de entrada en una base de datos (PostgreSQL).
+  - Exponer métricas de Prometheus para monitoreo (contador de peticiones y latencia).
+- **Streamlit**: Una aplicación web interactiva que sirve como interfaz de usuario para el modelo de predicción. Permite a los usuarios:
+  - Ingresar datos de propiedades a través de un formulario.
+  - Enviar estos datos a la API de FastAPI para obtener predicciones.
+  - Mostrar la predicción estimada y la versión del modelo utilizada.
+  - Visualizar el historial de decisiones y modelos registrados en MLflow, incluyendo métricas como RMSE y el estado de promoción de los modelos.
 - **Prometheus**: Un sistema de monitoreo para recolectar métricas de la API y otros servicios.
 - **Grafana**: Una plataforma de visualización que permite crear dashboards a partir de las métricas recolectadas por Prometheus.
 
@@ -35,41 +45,9 @@ git clone https://github.com/CamiDzN/Proyecto-MLOps.git
 cd Proyecto-MLOps/Servidor3
 ```
 
-### 🏗️ Construcción de Imágenes Docker
-
-Navega a los directorios de cada servicio (FastAPI, Streamlit, Prometheus, Grafana) y construye sus respectivas imágenes Docker. Asegúrate de que las imágenes tengan los tags correctos para que Kubernetes pueda encontrarlas.
-
-**FastAPI:**
-```bash
-cd fastapi
-docker build -t camidzn/fastapi-inference:latest .
-cd ..
-```
-
-**Streamlit:**
-```bash
-cd streamlit
-docker build -t camidzn/streamlit-app:latest .
-cd ..
-```
-
-**Prometheus:**
-```bash
-cd prometheus
-docker build -t camidzn/prometheus:initial .
-cd ..
-```
-
-**Grafana:**
-```bash
-cd grafana
-docker build -t camidzn/grafana-dashboard:latest .
-cd ..
-```
-
 ### 🚀 Despliegue en Kubernetes
 
-Una vez que las imágenes Docker estén construidas y disponibles (ya sea localmente o en un registro de Docker), puedes desplegar los servicios en tu clúster de Kubernetes. Asegúrate de que tu `kubeconfig` esté configurado correctamente para apuntar a tu clúster de MicroK8s.
+Las imágenes Docker para los servicios (FastAPI, Streamlit, Prometheus, Grafana) se obtienen directamente desde Docker Hub. Asegúrate de que tu `kubeconfig` esté configurado correctamente para apuntar a tu clúster de MicroK8s.
 
 Navega al directorio `k8s` dentro de `Servidor3` y aplica los manifiestos de Kubernetes:
 
