@@ -396,99 +396,133 @@ with DAG(
         df_val    = pd.read_sql_table("validation_clean", con=engine)
         df_test   = pd.read_sql_table("test_clean",       con=engine)
 
-        X_train, y_train = df_train.drop("price", axis=1), df_train["price"]
-        X_val,   y_val   = df_val.drop("price", axis=1),   df_val["price"]
-        X_test,  y_test  = df_test.drop("price", axis=1),  df_test["price"]
+        X_train_raw, y_train = df_train.drop("price", axis=1), df_train["price"]
+        X_val_raw,   y_val   = df_val.drop("price", axis=1),   df_val["price"]
+        X_test_raw,  y_test  = df_test.drop("price", axis=1),  df_test["price"]
 
         logging.info(
-            f"train_and_register → tamaños: "
-            f"train={len(df_train)}, val={len(df_val)}, test={len(df_test)}"
+            f"train_and_register → tamaños: train={len(df_train)}, "
+            f"val={len(df_val)}, test={len(df_test)}"
         )
 
         # 2) Configurar MLflow
         mlflow.set_tracking_uri(os.getenv("AIRFLOW_VAR_MLFLOW_TRACKING_URI"))
+        # Cambia esto al nombre de experimento que quieras (evita un experimento borrado)
         mlflow.set_experiment("Realtor_Price_Experiment")
 
-        # 3) Hiperparámetros a probar
+        # 3) Lista de alphas a probar
         alphas = [0.01, 0.1, 1.0, 10.0, 100.0]
         best_alpha    = None
-        best_val_rmse = np.inf
+        best_val_rmse = float("inf")
 
-        # 4) Primer run: prueba de alphas
+        # 4) Primera corrida: búsqueda manual de alpha usando solo train/val
         with mlflow.start_run(run_name=f"train__{dag_run.run_id}") as run:
             current_run_id = run.info.run_id
 
             for α in alphas:
-                m      = Ridge(alpha=α).fit(X_train, y_train)
-                # --- aquí el cambio: numpy.sqrt( MSE ) en lugar de squared=False ---
-                rmse_v = np.sqrt(mean_squared_error(y_val, m.predict(X_val)))
+                m      = Ridge(alpha=α).fit(X_train_raw, y_train)
+                rmse_v = np.sqrt(mean_squared_error(y_val, m.predict(X_val_raw)))
                 mlflow.log_metric(f"val_rmse_alpha_{α}", rmse_v)
-
                 if rmse_v < best_val_rmse:
                     best_val_rmse = rmse_v
                     best_alpha    = α
 
-            # 5) Reentrenar en train+val
-            X_trval = np.vstack([X_train.values, X_val.values])
-            y_trval = np.hstack([y_train.values, y_val.values])
+            # 5) Volvemos a entrenar el modelo final con train+val (sobrescribo X, y)
+            X_trval = np.vstack([X_train_raw.values, X_val_raw.values])
+            y_trval = np.hstack([y_train.values,    y_val.values])
             final_model = Ridge(alpha=best_alpha).fit(X_trval, y_trval)
 
             # 6) Evaluar en test
-            test_rmse = np.sqrt(mean_squared_error(y_test, final_model.predict(X_test)))
 
-            # 7) Log de métricas y modelo
+            # 7) Guardo en MLflow: métricas “best_val_rmse” y “test_rmse” + parámetro “best_alpha”
             mlflow.log_metric("best_val_rmse", best_val_rmse)
-            mlflow.log_metric("test_rmse",     test_rmse)
-            mlflow.log_param( "best_alpha",    best_alpha)
+
+            # 7.1) Antes de loguear “test_rmse”, debo alinear columnas de X_test_raw
+            #     con las mismas columnas con las que se entrenó final_model.
+            #     Para ello, construyo la lista de columnas “consistentes” entre train+val+y_test:
+            all_cols = sorted(
+                set(X_train_raw.columns)
+                | set(X_val_raw.columns)
+                | set(X_test_raw.columns)
+            )
+            X_train_aligned = pd.DataFrame(X_trval, columns=X_train_raw.columns).reindex(
+                columns=all_cols, fill_value=0
+            )
+            # NOTA: X_trval era solo valores numpy sin nombres de columnas, pero sabemos que correspondía
+            #       al stack de (X_train_raw, X_val_raw) en ese orden, con las mismas columnas de X_train_raw.
+            #       Al crear el DataFrame así, me aseguro de que estén en “all_cols” exacto.
+            X_test_aligned = X_test_raw.reindex(columns=all_cols, fill_value=0)
+
+            # 7.2) Ahora sí calculo el RMSE sobre test con las columnas alineadas:
+            test_rmse = np.sqrt(mean_squared_error(y_test, final_model.predict(X_test_aligned)))
+            mlflow.log_metric("test_rmse", test_rmse)
+            mlflow.log_param( "best_alpha", best_alpha)
+
+            # 8) Guardar el modelo final en el Registry (se creará una nueva versión)
             mlflow.sklearn.log_model(
                 sk_model               = final_model,
                 artifact_path          = "model",
                 registered_model_name = "RealtorPriceModel"
             )
 
-        # 8) Buscar el mejor run ANTERIOR con MlflowClient
+        # ——————————————————————————————————————————————————————————————————
+        # 9) Después de cerrar el “with mlflow.start_run(...)”, buscamos la mejor corrida anterior
+        #    que ya tenga registrada la métrica “test_rmse” (excluyendo el run recién generado).
         client = MlflowClient(tracking_uri=os.getenv("AIRFLOW_VAR_MLFLOW_TRACKING_URI"))
         exp    = client.get_experiment_by_name("Realtor_Price_Experiment")
+
         prior = client.search_runs(
             experiment_ids=[exp.experiment_id],
-            filter_string = f"attributes.run_id != '{current_run_id}'",
-            order_by       = ["metrics.test_rmse ASC"],
-            max_results    = 1,
+            filter_string=(
+                f"attributes.run_id != '{current_run_id}' "
+                "AND metrics.test_rmse IS NOT NULL"
+            ),
+            order_by=["metrics.test_rmse ASC"],
+            max_results=1,
         )
-        prev_best_rmse = prior[0].data.metrics["test_rmse"] if prior else None
+        if prior:
+            prev_best_rmse = prior[0].data.metrics["test_rmse"]
+        else:
+            prev_best_rmse = None
 
         promoted = (prev_best_rmse is None) or (test_rmse < prev_best_rmse)
 
-        # 9) Reabrir el run actual para taggear y, si toca, promover en el Registry
+        # 10) Volvemos a abrir el run actual para añadir tags extra y, si toca, promover a Production
         with mlflow.start_run(run_id=current_run_id):
             mlflow.set_tag("dag_run_id",         dag_run.run_id)
             mlflow.set_tag("execution_date",     context["execution_date"].isoformat())
             mlflow.set_tag("previous_best_rmse", str(prev_best_rmse))
             mlflow.set_tag("current_rmse",       str(test_rmse))
-            mlflow.set_tag("promoted",           str(promoted).lower())
+            mlflow.set_tag("promoted",           "true" if promoted else "false")
 
-            # 10) Promover la versión del modelo si corresponde
             if promoted:
+                # Recuperar todas las versiones de “RealtorPriceModel” (None, Staging, Production)
                 versions = client.get_latest_versions("RealtorPriceModel")
+                # Buscamos la que coincide con run_id == current_run_id
                 my_version = next(
                     (v.version for v in versions if v.run_id == current_run_id),
                     None,
                 )
                 if my_version is None:
-                    raise RuntimeError(f"No encontré la versión para run {current_run_id}")
+                    raise RuntimeError(f"No me encontré la versión para run {current_run_id}")
 
+                # Hacemos la transición a Production y archivamos las anteriores
                 client.transition_model_version_stage(
-                    name                     = "RealtorPriceModel",
-                    version                  = my_version,
-                    stage                    = "Production",
+                    name                      = "RealtorPriceModel",
+                    version                   = my_version,
+                    stage                     = "Production",
                     archive_existing_versions = True,
                 )
-                logging.info(f"train_and_register → promovida versión {my_version} a Production")
+                logging.info(
+                    f"train_and_register → Modelo version {my_version} "
+                    f"promovido a Production"
+                )
 
         logging.info(
             f"train_and_register → run_id={current_run_id}  "
             f"best_alpha={best_alpha}  test_rmse={test_rmse:.2f}  promoted={promoted}"
         )
+
 
     train_task = PythonOperator(
         task_id="train_and_register",
