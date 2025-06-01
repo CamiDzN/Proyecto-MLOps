@@ -15,8 +15,7 @@ spec:
     spec:
       containers:
       - name: mlflow
-        image: localhost:32000/custom-mlflow:latest
-        imagePullPolicy: IfNotPresent
+        image: camidzn/mlflow-custom:initial
         ports:
         - containerPort: 5000
         env:
