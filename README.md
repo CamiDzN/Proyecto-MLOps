@@ -5,7 +5,7 @@ Este proyecto implementa una solución completa de MLOps distribuida en tres ser
 La arquitectura del proyecto está basada en contenedores Docker orquestados con Kubernetes (MicroK8s) y está organizada en tres entornos funcionales independientes, desplegados en máquinas virtuales diferentes:
 
  
-#### 📂 Estructura Detallada de Carpeta - **[Servidor 1](Servidor1/README.md)**
+#### 📂 Estructura Detallada de Carpeta - **[Servidor 1](Servidor1/README.md)**:
 ```
 ├── .env
 ├── README.md
