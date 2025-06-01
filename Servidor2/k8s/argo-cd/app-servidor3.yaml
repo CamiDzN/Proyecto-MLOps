@@ -11,7 +11,7 @@ spec:
     path: Servidor3/k8s
   destination:
     server: https://10.43.101.173:16443
-    namespace: mlops
+    namespace: default
   syncPolicy:
     automated:
       selfHeal: true
