@@ -75,7 +75,7 @@ Una vez que los pods estén en ejecución, puedes acceder a los servicios:
 - **FastAPI**: El servicio de FastAPI estará disponible internamente en el clúster. Si necesitas acceder desde fuera, puedes configurar un `NodePort` o `Ingress`.
 - **Streamlit**: Accede a la interfaz de Streamlit a través del `NodePort` o `Ingress` configurado en `streamlit-service.yaml`.
 - **Prometheus**: Accede a la interfaz de Prometheus a través del `NodePort` configurado en `prometheus-service.yaml`.
-- **Grafana**: Accede a la interfaz de Grafana a través del `NodePort` configurado en `grafana-service.yaml`. Las credenciales por defecto suelen ser `admin/admin`.
+- **Grafana**: Accede a la interfaz de Grafana a través del `NodePort` configurado en `grafana-service.yaml`. El acceso anónimo está habilitado.
 
 Para obtener los `NodePort`s, puedes ejecutar:
 
@@ -84,3 +84,24 @@ kubectl get services -n default
 ```
 
 Busca los puertos asignados a `streamlit-service`, `prometheus-service` y `grafana-service`.
+
+### 🧪 Validación y Monitoreo
+
+Una vez desplegados los servicios, puedes verificar su estado y acceder a las interfaces de monitoreo:
+
+*   **Pods y servicios en Servidor 3**:
+
+    ```bash
+    kubectl get pods -n default
+    kubectl get svc -n default
+    ```
+
+    Asegúrate de que todos los pods estén en estado `Running` y los servicios tengan los `NodePort`s asignados.
+
+*   **Prometheus UI**:
+
+    Accede a la interfaz de usuario de Prometheus a través del `NodePort` configurado para `prometheus-service` (ej. `http://<IP_Servidor3>:<NodePort_Prometheus>`).
+
+*   **Grafana UI**:
+
+    Accede a la interfaz de usuario de Grafana a través del `NodePort` configurado para `grafana-service` (ej. `http://<IP_Servidor3>:<NodePort_Grafana>`). El acceso anónimo está habilitado.
