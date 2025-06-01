@@ -23,6 +23,16 @@ El **Servidor 3** es una pieza clave en la arquitectura MLOps, encargado de la f
 
 Todos estos servicios están orquestados mediante **Kubernetes (MicroK8s)**, lo que garantiza escalabilidad, alta disponibilidad y facilidad de gestión.
 
+### 🗂️ Estructura de la Carpeta `k8s`
+
+La carpeta `k8s` contiene todos los manifiestos de Kubernetes necesarios para desplegar los servicios de FastAPI, Streamlit, Prometheus y Grafana en el clúster. Estos archivos definen los `Deployments`, `Services`, `ConfigMaps` y otros recursos que orquestan la aplicación.
+
+El archivo clave en esta carpeta es `kustomization.yaml`:
+
+- **`kustomization.yaml`**: Este archivo es utilizado por Kustomize (una herramienta nativa de Kubernetes) para personalizar y combinar los manifiestos de Kubernetes. En este proyecto, `kustomization.yaml` se encarga de:
+  - Listar todos los recursos (`.yaml` files) que deben ser aplicados al clúster (Deployments, Services, ConfigMaps, etc.).
+  - Gestionar las etiquetas de las imágenes Docker, permitiendo actualizar las versiones de las imágenes de los servicios (FastAPI, Grafana, Prometheus, Streamlit) de manera centralizada.
+
 ## 🚀 Despliegue y Ejecución
 
 Para desplegar y ejecutar los servicios en el **Servidor 3**, sigue los siguientes pasos:
