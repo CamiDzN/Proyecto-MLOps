@@ -238,8 +238,6 @@ Cada vez que se hace push a `main` y hay modificaciones en la carpeta correspond
 
 De esta forma, los despliegues quedan automatizados y sincronizados con las imágenes publicadas en Docker Hub.  
 
-![image](https://github.com/user-attachments/assets/2c75432b-8de6-40d2-838e-1ecd7d308c13)
-
 ## Detalle de cada tarea en el DAG `realtor_price_model`
 
 A continuación se describen de manera concisa y concreta las acciones que realiza cada tarea:
@@ -367,7 +365,57 @@ De esta forma, el DAG cubre tres caminos principales:
   - **Métricas** (solo en entrenamientos).  
   - **Modelo serializado** (solo en entrenamientos) que luego puede marcarse como “Production” si mejora el desempeño.
  
-![image](https://github.com/user-attachments/assets/d3090c6d-034f-464e-b3b0-00d18311ad59)
+![image](https://github.com/user-attachments/assets/295aa5bc-d527-4b95-8015-db61dd0dbdc8)
+
+## 3. Observabilidad y Monitorización
+
+Integramos Streamlit, Prometheus y Grafana para ofrecer una vista unificada de predicciones, métricas y dashboards.
+
+### 3.1 Panel de Streamlit (Inferencia y Historial)
+- **Objetivo**:
+  - Ingresar características de una propiedad y obtener la **predicción estimada** (por ejemplo: `$245,706.06`).
+  - Mostrar el **modelo en producción** (por ejemplo: “versión 9”).
+  - Presentar un **historial tabulado** con todas las corridas del DAG:
+    - **Dag_Run_ID**
+    - **Decision** (`split_data`, `end_no_train`, etc.)
+    - **Decision Reason**
+    - **Model name** (solo si se entrenó)
+    - **Model Version** (solo si se promovió)
+    - **Current Rsme** y **Previous Rsme** (si aplican)
+    - **Promoted** (`true` / `false`)
+
+
+![image](https://github.com/user-attachments/assets/edd01fa7-6176-4d57-a096-a1d199b3bc11)
+
+
+![image](https://github.com/user-attachments/assets/bb9e5d3b-913f-4dcb-af99-29742b7c1141)
+
+![image](https://github.com/user-attachments/assets/2f7865d6-9c1c-41f9-9dce-0520c6aa5d88)
+
+
+### 3.2 Prometheus (Scrape de Métricas)
+- **Objetivo**:
+  - Recopilar métricas de la API de inferencia (FastAPI) y de Prometheus.
+  - Configuración básica en `prometheus.yml`:
+
+- **Métricas Recopiladas**:
+  - **Tasa de peticiones de inferencia** (`requests_per_second`)
+  - **Latencia de inferencia** (percentil 95: `p95_latency_seconds`)
+  - Métricas internas de Prometheus (uso de CPU, memoria, etc.)
+
+![image](https://github.com/user-attachments/assets/85e259c3-7c83-432d-9c44-93b36f26c86f)
+
+
+### 3.3 Grafana (Dashboards de Métricas)
+- **Objetivo**:
+  - Visualizar en tiempo real las métricas recolectadas por Prometheus.
+  - Paneles sugeridos:
+    - **Tasa de peticiones de inferencia (peticiones/segundo)**
+    - **P95 de latencia de inferencias (segundos)**
+    - **Uso de CPU y memoria** del contenedor de la API
+
+![image](https://github.com/user-attachments/assets/7bf6bb24-9a03-493e-97a6-e1d7bdcd4d97)
+
 
 
 ## 🚀 ¿Cómo ejecutar el proyecto completo?
