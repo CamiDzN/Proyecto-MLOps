@@ -62,11 +62,6 @@ Este README describe en detalle cómo están organizados y desplegados los servi
 
 **Ruta:** `Servidor3/streamlit/`
 
-![Streamlit](public/Streamlit_1.png)
-
-
-![Streamlit](public/Streamlit_2.png)
-
 ### Contenido
 
 - **Dockerfile**: Define la imagen Docker para la aplicación Streamlit.
@@ -82,7 +77,6 @@ Este README describe en detalle cómo están organizados y desplegados los servi
 
 **Ruta:** `Servidor3/prometheus/`
 
-![prometheus](public/Prometheus.png)
 
 ### Contenido
 
@@ -98,9 +92,6 @@ Este README describe en detalle cómo están organizados y desplegados los servi
 ## 4. Grafana (Visualización de Métricas)
 
 **Ruta:** `Servidor3/grafana/`
-
-![Grafana](public/Grafana.png)
-
 
 ### Contenido
 
