@@ -414,7 +414,6 @@ Integramos Streamlit, Prometheus y Grafana para ofrecer una vista unificada de p
   - Paneles sugeridos:
     - **Tasa de peticiones de inferencia (peticiones/segundo)**
     - **P95 de latencia de inferencias (segundos)**
-    - **Uso de CPU y memoria** del contenedor de la API
 
 ![image](https://github.com/user-attachments/assets/7bf6bb24-9a03-493e-97a6-e1d7bdcd4d97)
 
