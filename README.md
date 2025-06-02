@@ -417,34 +417,3 @@ Integramos Streamlit, Prometheus y Grafana para ofrecer una vista unificada de p
 
 ![image](https://github.com/user-attachments/assets/7bf6bb24-9a03-493e-97a6-e1d7bdcd4d97)
 
-
-
-## 🚀 ¿Cómo ejecutar el proyecto completo?
-✅ Asegúrate de que los 3 servidores estén activos, conectados en la misma red y con Kubernetes (MicroK8s) habilitado.
-
-🔌 Paso a paso por servidor
-🖥️ Servidor 1 — Preprocesamiento y orquestación
-
-```bash
-kubectl apply -f Servidor1/kubernetes/
-```
-Accede a Airflow y ejecuta el DAG realtor_price_model.py.
-
-🗃️ Servidor 2 — Almacenamiento y MLflow
-
-```bash
-docker build -t custom-mlflow:latest .
-docker tag custom-mlflow:latest localhost:32000/custom-mlflow:latest
-docker push localhost:32000/custom-mlflow:latest
-kubectl apply -f Servidor2/kubernetes/
-kubectl apply -f Servidor2/kubernetes/create-minio-bucket.yaml
-```
-
-📡 Servidor 3 — Inferencia, monitoreo y UI
-
-```bash
-kubectl apply -f Servidor3/kubernetes/
-```
-
-Accede a la API o interfaz de Streamlit para hacer predicciones.
-Verifica métricas en Prometheus y visualízalas en Grafana.
