@@ -97,9 +97,9 @@ Este workflow se activa en cada push a la rama `main` que modifique archivos den
    - Construye la imagen usando como contexto `Servidor1/airflow`.  
    - Etiqueta la imagen como `${{ secrets.DOCKERHUB_USER }}/airflow:${{ IMAGE_TAG }}` y la carga en el daemon local para pruebas.
 
-5. **Smoke-test: regresión y SHAP**  
-   - Ejecuta un contenedor con la nueva imagen e importa un pequeño DataFrame, entrena un modelo de regresión lineal y calcula valores SHAP.  
-   - Verifica que la forma de los valores SHAP coincida con el DataFrame. Si todo está correcto, imprime `✅ Entrenamiento y SHAP OK`.  
+5. **Smoke-test: regresión**  
+   - Ejecuta un contenedor con la nueva imagen e importa un pequeño DataFrame, entrena un modelo de regresión lineal.  
+   - Verifica que la forma de los valores coincida con el DataFrame. Si todo está correcto, imprime `✅ Entrenamiento`.  
    - Si falla, detiene el workflow evitando que se publique una imagen defectuosa.
 
 6. **Push de imagen validada a Docker Hub**  
@@ -195,6 +195,7 @@ Este workflow cubre cuatro componentes (Grafana, Prometheus, Streamlit y FastAPI
 
 ---
 
+
 ### Resumen de la lógica general
 
 - Cada workflow reacciona automáticamente a cambios en su carpeta correspondiente dentro de `Servidor1`, `Servidor2` o `Servidor3`.
@@ -204,8 +205,9 @@ Este workflow cubre cuatro componentes (Grafana, Prometheus, Streamlit y FastAPI
 - Actualiza el archivo de configuración (`.env` o `kustomization.yaml`) que identifica qué imagen usar en producción.
 - Hace **commit & push** de ese cambio para que el despliegue en Producción (ya sea Airflow o Kubernetes) consuma automáticamente la nueva versión.
 
-De esta forma, cualquier cambio en el código fuente desencadena el pipeline de CI/CD, garantizando que la imagen Docker se construya, pruebe mínimamente (en el caso de Airflow) y se despliegue de manera coherente y automatizada. Sólo será necesario copiar este contenido al README de tu repositorio para describir detalladamente cada workflow de GitHub Actions.  
+De esta forma, cualquier cambio en el código fuente desencadena el pipeline de CI/CD, garantizando que la imagen Docker se construya, pruebe mínimamente (en el caso de Airflow) y se despliegue de manera coherente y automatizada.
 
+![image](https://github.com/user-attachments/assets/5f6d5fdb-940b-43a6-8ac6-b13b34dbb3e3)   
 
 ## Despliegue Continuo con ArgoCD
 
@@ -229,7 +231,7 @@ En este proyecto utilizamos **ArgoCD** para que, al detectar cambios en GitHub, 
   - Al detectar actualizaciones, sincroniza los recursos en el cluster de Servidor3.  
   - También descarga las imágenes desde Docker Hub según las etiquetas en los YAML.
 
-![image](https://github.com/user-attachments/assets/5f6d5fdb-940b-43a6-8ac6-b13b34dbb3e3)
+
 
 Cada vez que se hace push a `main` y hay modificaciones en la carpeta correspondiente, ArgoCD:  
 1. Descarga los archivos YAML del repositorio.  
