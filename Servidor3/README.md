@@ -62,10 +62,10 @@ Este README describe en detalle cómo están organizados y desplegados los servi
 
 **Ruta:** `Servidor3/streamlit/`
 
-![Streamlit](public/Streamlit 1.png)
+![Streamlit](public/Streamlit_1.png)
 
-![Streamlit](public/Streamlit 2.png)
 
+![Streamlit](public/Streamlit_2.png)
 
 ### Contenido
 
