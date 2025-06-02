@@ -111,8 +111,6 @@ docker compose up -d
 
 **Ruta:** `Servidor1/kubernetes/deployments` y `Servidor1/kubernetes/services`
 
-### Despliegue
-
 1. **ConfigMap** `mysql-init-configmap.yaml` → crea automáticamente las bases de datos *CleanData* y *RawData*, define permisos de usuario y ejecuta la inicialización. Ejemplo de contenido:
 
 ```yaml
@@ -131,6 +129,8 @@ data:
 2. **PersistentVolumeClaim** `mysql-pvc.yaml` → hostPath de 5 Gi.
 3. **Deployment** `mysql-deployment.yaml` → contenedor `mysql:8.0`, usuario `model_user`.
 4. **Service** `mysql-service.yaml` → `NodePort` 30306 → 3306 interno.
+
+### Despliegue
 
 ```bash
 microk8s kubectl apply -f kubernetes/deployments/mysql-init-configmap.yaml
