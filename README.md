@@ -1,128 +1,110 @@
+
 # 🧠 Descripción General del Proyecto
 
-Este proyecto implementa una solución completa de MLOps distribuida en tres servidores, diseñada para gestionar todo el ciclo de vida de un modelo de machine learning.
+Este proyecto implementa una solución completa de MLOps distribuida en tres servidores, diseñada para gestionar todo el ciclo de vida de un modelo de machine learning que predice precios de propiedades inmobiliarias.
 
 La arquitectura del proyecto está basada en contenedores Docker orquestados con Kubernetes (MicroK8s) y está organizada en tres entornos funcionales independientes, desplegados en máquinas virtuales diferentes:
 
- 
-#### 📂 Estructura Detallada de Carpeta - **[Servidor 1](Servidor1/README.md)**:
-```
-├── .env
-├── README.md
-├── airflow\
-│   ├── Dockerfile
-│   └── requirements.txt
-├── dags\
-│   └── realtor_price_model.py
-├── docker-compose.yaml
-├── kubeconfig-servidor1.yaml
-└── kubernetes\
-    ├── mysql-deployment.yaml
-    ├── mysql-init-configmap.yaml
-    ├── mysql-pvc.yaml
-    └── mysql-service.yaml
-```
-
-Dedicado a la ingesta, preprocesamiento y preparación de datos. Incluye la configuración de Apache Airflow en la carpeta `airflow/` con su `Dockerfile` y `requirements.txt`, y el DAG principal `realtor_price_model.py` en `dags/` para la orquestación del flujo de datos. La base de datos MySQL se gestiona con manifiestos de Kubernetes en `kubernetes/` (despliegue, configmap de inicialización, PVC y servicio). También contiene `docker-compose.yaml` para el entorno de desarrollo y `kubeconfig-servidor1.yaml` para la conexión al clúster.
- 
-
-#### 📂 Estructura Detallada de Carpeta - **[Servidor 2](Servidor2/README.md)**:
-
-```
-├── README.md
-├── k8s\
-│   ├── argo-cd\
-│   │   ├── app-servidor1.yaml
-│   │   ├── app-servidor3.yaml
-│   │   ├── app.yaml
-│   │   └── install.yaml
-│   ├── create-minio-bucket.yaml
-│   ├── kustomization.yaml
-│   ├── minio-deployment.yaml
-│   ├── minio-service.yaml
-│   ├── mlflow-deployment.yaml
-│   ├── mlflow-service.yaml
-│   ├── namespace.yaml
-│   ├── postgres-deployment.yaml
-│   └── postgres-service.yaml
-├── kubeconfig-servidor1.yaml
-├── kubeconfig-servidor3.yaml
-└── mlflow\
-    └── Dockerfile
-```
-
-
-Centraliza el registro de experimentos y la gestión de artefactos. La carpeta `k8s/` contiene todos los manifiestos de Kubernetes para desplegar MLflow, MinIO y PostgreSQL, incluyendo `minio-deployment.yaml`, `mlflow-deployment.yaml`, `postgres-deployment.yaml` y sus respectivos servicios. Dentro de `k8s/argo-cd/` se encuentran las definiciones de aplicaciones de ArgoCD (`app.yaml`, `app-servidor1.yaml`, `app-servidor3.yaml`) para la automatización de despliegues en los tres servidores. La carpeta `mlflow/` contiene el `Dockerfile` para la imagen de MLflow. También incluye `kubeconfig-servidor1.yaml` y `kubeconfig-servidor3.yaml` para la conexión a los clústeres remotos.
-
-#### 📂 Estructura Detallada de Carpeta - **[Servidor 3](Servidor3/README.md)**:
-```
-├── README.md
-├── fastapi\
-│   ├── Dockerfile
-│   ├── main.py
-│   └── requirements.txt
-├── grafana\
-│   ├── Dockerfile
-│   └── provisioning\
-│       ├── dashboards.yml
-│       └── datasources.yml
-├── k8s\
-│   ├── api-deployment.yaml
-│   ├── api-service.yaml
-│   ├── grafana-configmap.yaml
-│   ├── grafana-dashboards-configmap.yaml
-│   ├── grafana-deployment.yaml
-│   ├── grafana-ini-overrides.yaml
-│   ├── grafana-service.yaml
-│   ├── kustomization.yaml
-│   ├── prometheus-configmap.yaml
-│   ├── prometheus-deployment.yaml
-│   ├── prometheus-service.yaml
-│   ├── streamlit-deployment.yaml
-│   └── streamlit-service.yaml
-├── kubeconfig-servidor3.yaml
-├── prometheus\
-│   ├── Dockerfile
-│   └── prometheus.yml
-└── streamlit\
-    ├── Dockerfile
-    ├── app.py
-    └── requirements.txt
-```
-
-Encargado del despliegue y monitoreo del modelo en producción. Aloja una API con FastAPI (`fastapi/`), una interfaz de usuario con Streamlit (`streamlit/`), monitoreo con Prometheus (`prometheus/`) y visualización con Grafana (`grafana/`). Cada una de estas carpetas contiene su `Dockerfile` y archivos de configuración (`main.py` para FastAPI, `app.py` para Streamlit, `prometheus.yml` para Prometheus, y `provisioning/` para Grafana). La carpeta `k8s/` es crucial, ya que contiene todos los manifiestos de Kubernetes (`api-deployment.yaml`, `grafana-deployment.yaml`, `prometheus-deployment.yaml`, `streamlit-deployment.yaml` y sus servicios y configmaps asociados), con `kustomization.yaml` para la gestión de recursos y etiquetas de imágenes Docker. También incluye `kubeconfig-servidor3.yaml` para la conexión al clúster.
+- **Servidor 1**: Encargado del preprocesamiento automático de datos con Apache Airflow.
+- **Servidor 2**: Responsable del registro de experimentos y gestión de artefactos con MLflow y MinIO.
+- **Servidor 3**: Despliega el modelo en producción mediante una API con FastAPI, integra monitoreo con Prometheus & Grafana, pruebas de carga con Locust y una interfaz de usuario con Streamlit.
 
 Este enfoque modular permite escalar y mantener cada componente de forma independiente, emulando un entorno real de producción distribuido.
 
-## 🧠 Descripción General del Servidor 3
+> 💡 El objetivo principal es proporcionar predicciones precisas de precios inmobiliarios mediante un sistema MLOps completo, permitiendo a los usuarios obtener estimaciones basadas en características de las propiedades.
 
-El **Servidor 3** es una pieza clave en la arquitectura MLOps, encargado de la fase de **despliegue y monitoreo** del modelo de Machine Learning. Este servidor aloja los siguientes componentes:
+---
 
-- **FastAPI**: Una API RESTful que expone el modelo de inferencia de precios de propiedades. Se encarga de:
-  - Recibir datos crudos de entrada.
-  - Preprocesar los datos para alinearlos con el formato esperado por el modelo.
-  - Cargar el modelo de Machine Learning desde MLflow (en etapa de Producción).
-  - Realizar predicciones.
-  - Almacenar los datos de entrada en una base de datos (PostgreSQL).
-  - Exponer métricas de Prometheus para monitoreo (contador de peticiones y latencia).
-- **Streamlit**: Una aplicación web interactiva que sirve como interfaz de usuario para el modelo de predicción. Permite a los usuarios:
-  - Ingresar datos de propiedades a través de un formulario.
-  - Enviar estos datos a la API de FastAPI para obtener predicciones.
-  - Mostrar la predicción estimada y la versión del modelo utilizada.
-  - Visualizar el historial de decisiones y modelos registrados en MLflow, incluyendo métricas como RMSE y el estado de promoción de los modelos.
-- **Prometheus**: Un sistema de monitoreo para recolectar métricas de la API y otros servicios.
-- **Grafana**: Una plataforma de visualización que permite crear dashboards a partir de las métricas recolectadas por Prometheus.
+## 🗂️ Distribución del Proyecto por Servidores
 
-Todos estos servicios están orquestados mediante **Kubernetes (MicroK8s)**, lo que garantiza escalabilidad, alta disponibilidad y facilidad de gestión.
+Este proyecto fue desarrollado colaborativamente y distribuido en tres máquinas virtuales, cada una encargada de un componente clave del flujo de trabajo MLOps. Cada servidor tiene su propio `README.md` con detalles técnicos y operativos específicos:
 
-### 🗂️ Estructura de la Carpeta `k8s`
+| Servidor | Rol Principal                                   | Enlace al Detalle |
+|----------|--------------------------------------------------|-------------------|
+| 🟦 Servidor 1 | Preprocesamiento de datos con Airflow           | [Ver README Servidor 1](./Servidor1/README.md) |
+| 🟩 Servidor 2 | Seguimiento de experimentos con MLflow y MinIO  | [Ver README Servidor 2](./Servidor2/README.md) |
+| 🟥 Servidor 3 | Despliegue, monitoreo y pruebas de inferencia   | [Ver README Servidor 3](./Servidor3/README.md) |
 
-La carpeta `k8s` contiene todos los manifiestos de Kubernetes necesarios para desplegar los servicios de FastAPI, Streamlit, Prometheus y Grafana en el clúster. Estos archivos definen los `Deployments`, `Services`, `ConfigMaps` y otros recursos que orquestan la aplicación.
+Cada una de estas secciones incluye:
+- Los contenedores desplegados.
+- Los DAGs y notebooks asociados.
+- Instrucciones de uso y pruebas.
 
-El archivo clave en esta carpeta es `kustomization.yaml`:
+> 📌 **Nota:** Todos los servidores están conectados en red local y comparten el acceso a la base de datos y el almacenamiento distribuido configurado para simular un entorno de producción real.
 
-- **`kustomization.yaml`**: Este archivo es utilizado por Kustomize (una herramienta nativa de Kubernetes) para personalizar y combinar los manifiestos de Kubernetes. En este proyecto, `kustomization.yaml` se encarga de:
-  - Listar todos los recursos (`.yaml` files) que deben ser aplicados al clúster (Deployments, Services, ConfigMaps, etc.).
-  - Gestionar las etiquetas de las imágenes Docker, permitiendo actualizar las versiones de las imágenes de los servicios (FastAPI, Grafana, Prometheus, Streamlit) de manera centralizada.
+---
+
+## 🧱 Arquitectura General del Proyecto
+
+El proyecto está distribuido en **tres servidores (máquinas virtuales)** que trabajan de manera coordinada para implementar un pipeline completo de MLOps. Cada servidor aloja componentes específicos de la arquitectura, asegurando modularidad, escalabilidad y claridad en la implementación.
+
+A continuación se presenta el diagrama de la arquitectura general:
+
+![Arquitectura](public/1. General.png)
+
+### 🔹 Servidor 1 – Preprocesamiento y Almacenamiento de Datos
+- **Airflow**: Orquestación de pipelines de preprocesamiento y entrenamiento.
+- **Base de Datos MySQL**: Almacena datos en dos capas:
+  - `RawData`: Datos crudos separados en train, validation y test.
+  - `CleanData`: Datos preprocesados listos para entrenamiento.
+- **DAGs**:
+  - `realtor_price_model.py`: Preprocesamiento, entrenamiento y registro del modelo de precios inmobiliarios.
+
+### 🔸 Servidor 2 – Seguimiento de Experimentos
+- **MLflow Tracking Server**: Registro de métricas, parámetros y artefactos.
+- **MinIO**: Almacenamiento compatible con S3 para guardar artefactos de modelos.
+- **MySQL Metadata**: Almacena la metadata generada por MLflow.
+- Imagen personalizada de MLflow desplegada con dependencias para conectividad segura.
+
+### 🔺 Servidor 3 – Despliegue, Observabilidad y Experiencia de Usuario
+- **FastAPI**: API de inferencia conectada al modelo en producción desde MLflow.
+- **Streamlit**: Interfaz gráfica para realizar predicciones desde la web.
+- **Prometheus + Grafana**: Monitoreo del comportamiento de la API:
+  - Latencia, uso de memoria, conteo de inferencias.
+
+> 🧩 Cada componente se desplegó como contenedor independiente y se conectó a través de redes virtuales internas. Las IPs asignadas por el clúster a cada servidor aseguran el enrutamiento correcto entre servicios.
+
+---
+## 🛠️ Tecnologías y Componentes Utilizados
+
+El proyecto se compone de varios microservicios, cada uno desplegado en contenedores independientes, comunicados entre sí dentro de un entorno orquestado con Kubernetes:
+
+- **MLflow**: Gestión de experimentos y modelos. Conectado a MinIO (artefactos) y MySQL (metadatos).
+- **Airflow**: Orquestación de pipelines de preprocesamiento y entrenamiento.
+- **MinIO**: Almacenamiento local de artefactos, compatible con S3.
+- **MySQL**: Bases de datos para RawData, CleanData y metadata de MLflow y Airflow.
+
+- **FastAPI**: API de inferencia del modelo en producción.
+- **Streamlit**: Interfaz gráfica para predicciones del modelo.
+- **Prometheus + Grafana**: Observabilidad y monitoreo de métricas de inferencia.
 
 
+## 🚀 ¿Cómo ejecutar el proyecto completo?
+✅ Asegúrate de que los 3 servidores estén activos, conectados en la misma red y con Kubernetes (MicroK8s) habilitado.
+
+🔌 Paso a paso por servidor
+🖥️ Servidor 1 — Preprocesamiento y orquestación
+
+```bash
+kubectl apply -f Servidor1/kubernetes/
+```
+Accede a Airflow y ejecuta el DAG realtor_price_model.py.
+
+🗃️ Servidor 2 — Almacenamiento y MLflow
+
+```bash
+docker build -t custom-mlflow:latest .
+docker tag custom-mlflow:latest localhost:32000/custom-mlflow:latest
+docker push localhost:32000/custom-mlflow:latest
+kubectl apply -f Servidor2/kubernetes/
+kubectl apply -f Servidor2/kubernetes/create-minio-bucket.yaml
+```
+
+📡 Servidor 3 — Inferencia, monitoreo y UI
+
+```bash
+kubectl apply -f Servidor3/kubernetes/
+```
+
+Accede a la API o interfaz de Streamlit para hacer predicciones.
+Verifica métricas en Prometheus y visualízalas en Grafana.
