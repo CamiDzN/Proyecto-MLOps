@@ -138,3 +138,27 @@ Servidor2/
  ![image](https://github.com/user-attachments/assets/0fc2fe1f-5ac0-493a-8324-e70be9043179)
 * Servidor 3
  ![image](https://github.com/user-attachments/assets/cbbad1de-8cda-4a2f-b8c1-220ece249286)
+
+## 4. **Despliegue Manual**
+
+# 1. Construir y etiquetar la imagen de MLflow
+```bash
+cd Servidor2/mlflow
+docker build -t camidzn/mlflow-custom:initial .
+docker tag camidzn/mlflow-custom:initial localhost:32000/custom-mlflow:initial
+   ```
+# 2. Enviar la imagen al registry local
+```bash
+docker push localhost:32000/custom-mlflow:initial
+   ```
+# 3. Crear namespace (si aún no existe)
+```bash
+kubectl create namespace mlops
+   ```
+# 4. Aplicar los manifiestos de Servidor2
+```bash
+cd ../../Servidor2/k8s
+kubectl apply -f .
+kubectl apply -f create-minio-bucket.yaml
+   ```
+
